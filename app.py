@@ -26,7 +26,7 @@ except ImportError:
 def buscar_logo():
     posibles_nombres = ["logo.png.png", "logo.png", "logo.png.gif", "logo.gif"]
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    posibles_carpetas = [".", base_dir, os.path.join(base_dir, "Nexxel Corporation"), os.path.join(base_dir, "..")]
+    posibles_carpetas = [".", base_dir, os.path.join(base_dir, "..")]
     for carpeta in posibles_carpetas:
         for nombre in posibles_nombres:
             ruta = os.path.join(carpeta, nombre)
@@ -140,7 +140,7 @@ if "current_user" not in st.session_state:
     st.session_state["current_user"] = ""
 
 def make_hash(password):
-    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), b"nexxel-corp", 200_000).hex()
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), b"demo-health-salt", 200_000).hex()
 
 
 def verify_password(stored_value, password):
@@ -219,7 +219,7 @@ def get_secrets_data():
     # Credenciales de prueba para el repositorio público de portafolio
     if not secrets.get("passwords"):
         secrets["passwords"] = {
-            "demo": "85cfffa7f1177f4cf4e8217d1bdfbce2650b111145145550068228926797fdd5"  # password: demo123
+            "demo": "5972e448a36dfbf49b945e9eb995431cc3cf6e90b483a33ca652f1e971924eca"  # password: demo123
         }
 
     return secrets
@@ -328,9 +328,9 @@ if not st.session_state["authenticated"]:
             """
             <div class="login-left">
                 <div class="brand-wrap">
-                    <h1>Nexxell Insurance</h1>
-                    <h3>Quotes Portal</h3>
-                    <p>A centralized and efficient platform for managing medical quotes and operational workflows.</p>
+                    <h1>Health Quotes</h1>
+                    <h3>Portal Demo</h3>
+                    <p>An enterprise-grade platform for managing medical insurance proposals, CRM integrations, and automated client quotes.</p>
                     <ul>
                         <li>⚡ Fast management of candidates and carriers</li>
                         <li>🔄 Automatic synchronization with monday.com</li>
