@@ -224,6 +224,25 @@ st.markdown(
         section[data-testid="stSidebar"], div[data-testid="stSidebar"] {
             background-color: #0F1535 !important; border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
+        /* ── BOTONES EN LA BARRA LATERAL (CONSERVAN DEGRADADO CORPORATIVO ORIGINAL) ── */
+        section[data-testid="stSidebar"] .stButton > button,
+        section[data-testid="stSidebar"] .stDownloadButton > button,
+        div[data-testid="stSidebar"] .stButton > button,
+        div[data-testid="stSidebar"] .stDownloadButton > button {
+            background: linear-gradient(115deg, #1C237A 0%, #631C82 50%, #EB3C96 100%) !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 8px !important;
+            box-shadow: 0 3px 10px rgba(99, 28, 130, 0.3) !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button:hover,
+        section[data-testid="stSidebar"] .stDownloadButton > button:hover,
+        div[data-testid="stSidebar"] .stButton > button:hover,
+        div[data-testid="stSidebar"] .stDownloadButton > button:hover {
+            box-shadow: 0 5px 16px rgba(235, 60, 150, 0.45) !important;
+            transform: translateY(-1px) !important;
+            filter: brightness(1.08) !important;
+        }
         .info-card {
             background: #FFFFFF; border: 1px solid var(--border-subtle); border-radius: 14px;
             padding: 1.2rem 1.4rem; box-shadow: 0 4px 16px rgba(28, 35, 122, 0.05); margin-bottom: 1.2rem;
@@ -1337,16 +1356,19 @@ st.sidebar.markdown(
             font-weight: 700 !important;
         }
 
-        /* ── BOTÓN SYNC MONDAY ── */
+        /* ── BOTÓN SYNC MONDAY (CONSERVA DEGRADADO CORPORATIVO ORIGINAL) ── */
         .st-key-btn_sync_monday_sidebar button {
-            background: #0073EA !important;
+            background: linear-gradient(115deg, #1C237A 0%, #631C82 50%, #EB3C96 100%) !important;
             color: #FFFFFF !important; border: none !important;
             border-radius: 8px !important; height: 38px !important; min-height: 38px !important;
             font-size: 0.87rem !important; font-weight: 600 !important;
-            box-shadow: 0 2px 8px rgba(0, 115, 234, 0.3) !important;
+            box-shadow: 0 3px 10px rgba(99, 28, 130, 0.3) !important;
+            transition: all 0.18s ease-in-out !important;
         }
         .st-key-btn_sync_monday_sidebar button:hover {
-            background: #0062C8 !important;
+            box-shadow: 0 5px 16px rgba(235, 60, 150, 0.45) !important;
+            transform: translateY(-1px) !important;
+            filter: brightness(1.08) !important;
         }
 
         /* ── BOTÓN LOG OUT ── */
@@ -1719,7 +1741,7 @@ if menu_option == "🔍 Search & Quote Candidate":
                 st.session_state[stage_key] = 1
                 st.rerun()
         with col_st2:
-            if st.button("👥 2. Household & Protocol", key=f"nav_tab_2_{cand_key}", use_container_width=True, type="primary" if s2_active else "secondary"):
+            if st.button("👥 2. Household & Demographics", key=f"nav_tab_2_{cand_key}", use_container_width=True, type="primary" if s2_active else "secondary"):
                 st.session_state[stage_key] = 2
                 st.rerun()
         with col_st3:
@@ -1773,28 +1795,68 @@ if menu_option == "🔍 Search & Quote Candidate":
                 st.session_state[stage_key] = 2
                 st.rerun()
 
-        # ── STAGE 2: HOUSEHOLD & SURROGACY PROTOCOL ──
+        # ── STAGE 2: HOUSEHOLD & DEMOGRAPHICS ──
         elif curr_stage == 2:
-            st.markdown("### Stage 2: Household & Surrogacy Demographics")
+            st.markdown("### Stage 2: Household & Demographics")
+
+            hh_size_key = f"hh_size_{cand_key}"
+            if hh_size_key not in st.session_state:
+                st.session_state[hh_size_key] = 1
+
+            hh_income_key = f"hh_income_{cand_key}"
+            if hh_income_key not in st.session_state:
+                st.session_state[hh_income_key] = 150000
+
             st.markdown(
                 f"""
-                <div class="info-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #E2E8F0; padding-bottom:8px; margin-bottom:12px;">
-                        <h4 style="margin:0; color:#1C237A; font-size:1.1rem; font-weight:700;">Candidate: {selected_candidate}</h4>
-                        <span style="background:#FDF0F6; color:#EB3C96; border:1px solid rgba(235,60,150,0.3); padding:3px 12px; border-radius:999px; font-size:0.75rem; font-weight:700;">
-                            Gestational Surrogacy Protocol
-                        </span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
-                        <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Household Size:</span><br><b>1 Member</b></div>
-                        <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Household Income:</span><br><b>$150,000 / year</b></div>
-                        <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Tobacco Use:</span><br><b>Non-Tobacco</b></div>
-                        <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Location:</span><br><b>{state_db} ({zip_db})</b></div>
+                <div class="info-card" style="margin-bottom: 1.1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4 style="margin:0; color:#1C237A; font-size:1.15rem; font-weight:700;">Candidate: {selected_candidate}</h4>
+                        <div style="background:#F8FAFC; border:1px solid #CBD5E1; padding:4px 14px; border-radius:8px; font-size:0.82rem; color:#475569; font-weight:600;">
+                            Location: <b style="color:#1C237A;">{state_db} ({zip_db})</b>
+                        </div>
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
+
+            # Editable Household Parameters
+            c_hh1, c_hh2 = st.columns(2)
+            with c_hh1:
+                hh_size_options = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                curr_hh_size = st.session_state.get(hh_size_key, 1)
+                idx_hh = hh_size_options.index(curr_hh_size) if curr_hh_size in hh_size_options else 0
+                new_hh_size = st.selectbox(
+                    "Household Size:",
+                    options=hh_size_options,
+                    index=idx_hh,
+                    format_func=lambda x: f"{x} Member" if x == 1 else f"{x} Members",
+                    key=f"sel_hh_size_{cand_key}",
+                    help="Select household size to include spouse or additional dependents."
+                )
+                if new_hh_size != curr_hh_size:
+                    st.session_state[hh_size_key] = new_hh_size
+                    st.rerun()
+
+            with c_hh2:
+                curr_income = st.session_state.get(hh_income_key, 150000)
+                new_income = st.number_input(
+                    "Household Income ($ / year):",
+                    min_value=0,
+                    max_value=2000000,
+                    value=int(curr_income),
+                    step=5000,
+                    format="%d",
+                    key=f"num_hh_income_{cand_key}",
+                    help="Annual household MAGI used for ACA eligibility and subsidy calculations."
+                )
+                if new_income != curr_income:
+                    st.session_state[hh_income_key] = new_income
+                    st.rerun()
+
+            if new_hh_size > 1:
+                st.info(f"👥 Household updated: **{new_hh_size} Members** (Primary Applicant + {new_hh_size - 1} dependent{'s' if new_hh_size > 2 else ''} included in quoting scope).")
 
             fechas_disponibles = generar_fechas_efectivas_futuras()
             idx_eff_s2 = fechas_disponibles.index(eff_date) if eff_date in fechas_disponibles else 0
