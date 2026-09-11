@@ -34,6 +34,19 @@ except ImportError:
 # ==============================================================================
 # 1. BÚSQUEDA DEL LOGO
 # ==============================================================================
+def generar_fechas_efectivas_futuras():
+    today = date.today()
+    fechas = []
+    y = today.year
+    m = today.month
+    for _ in range(18):
+        fechas.append(date(y, m, 1))
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return fechas
+
 def buscar_logo():
     posibles_nombres = ["logo.png.png", "logo.png", "logo.png.gif", "logo.gif"]
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -105,33 +118,48 @@ st.markdown(
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
         }
 
-        /* ── BOTÓN PRIMARIO BASE (AZUL MARINO CORPORATIVO NEXXELL) ── */
-        .stButton > button,
-        button[kind="secondary"] {
+        /* ── BOTÓN PRIMARIO (AZUL MARINO CORPORATIVO NEXXELL #1C237A) ── */
+        button[kind="primary"] {
             background: #1C237A !important;
             color: #FFFFFF !important;
             border: 1px solid #1C237A !important;
+            box-shadow: 0 2px 6px rgba(28, 35, 122, 0.18) !important;
+        }
+        button[kind="primary"]:hover {
+            background: #121752 !important;
+            border-color: #121752 !important;
+            color: #FFFFFF !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(28, 35, 122, 0.28) !important;
+        }
+
+        /* ── BOTÓN SECUNDARIO / BASE (FONDO BLANCO LIMPIO CON BORDE SUTIL) ── */
+        .stButton > button,
+        button[kind="secondary"] {
+            background: #FFFFFF !important;
+            color: #334155 !important;
+            border: 1.5px solid #CBD5E1 !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
         }
         .stButton > button:hover,
         button[kind="secondary"]:hover {
-            background: #121752 !important;
-            border-color: #121752 !important;
+            background: #F8FAFC !important;
+            border-color: #1C237A !important;
+            color: #1C237A !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 3px 10px rgba(28, 35, 122, 0.2) !important;
+            box-shadow: 0 2px 6px rgba(28, 35, 122, 0.08) !important;
         }
 
-        /* ── BOTÓN ESTRELLA / HERO CTA (SUBIR A MONDAY Y SYNC CRM) ── */
+        /* ── BOTÓN ESTRELLA / HERO CTA (ÚNICAMENTE SUBIR A MONDAY Y SYNC CRM) ── */
         .st-key-btn_upload_monday button,
-        .st-key-btn_sync_changes_crm button,
-        button[kind="primary"] {
+        .st-key-btn_sync_changes_crm button {
             background: linear-gradient(115deg, #1C237A 0%, #631C82 50%, #EB3C96 100%) !important;
             color: #FFFFFF !important;
             border: none !important;
             box-shadow: 0 3px 12px rgba(99, 28, 130, 0.25) !important;
         }
         .st-key-btn_upload_monday button:hover,
-        .st-key-btn_sync_changes_crm button:hover,
-        button[kind="primary"]:hover {
+        .st-key-btn_sync_changes_crm button:hover {
             box-shadow: 0 5px 18px rgba(235, 60, 150, 0.38) !important;
             transform: translateY(-1px) !important;
             filter: brightness(1.06) !important;
@@ -1636,40 +1664,6 @@ if menu_option == "🔍 Search & Quote Candidate":
             st.session_state[stage_key] = 3
         curr_stage = st.session_state[stage_key]
 
-        # ── 1. Top Enterprise Quoting Header (Matching Image 1) ──
-        st.markdown(
-            """
-            <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; padding:14px 20px; margin-bottom:14px; box-shadow:0 2px 10px rgba(15,23,42,0.04); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="background:#2563EB; color:#FFFFFF; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.25rem; font-weight:800; box-shadow:0 2px 8px rgba(37,99,235,0.3);">
-                        🛡️
-                    </div>
-                    <div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-size:1.2rem; font-weight:800; color:#0F172A; letter-spacing:-0.3px;">HealthQuote</span>
-                            <span style="background:#EFF6FF; color:#2563EB; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; letter-spacing:0.5px;">PRO</span>
-                        </div>
-                        <div style="font-size:0.75rem; color:#64748B; font-weight:500;">
-                            ACA Insurance Agent Quoting Engine &bull; HealthSherpa ONE & Covered California
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:#ECFDF5; border:1px solid #A7F3D0; color:#065F46; padding:5px 12px; border-radius:20px; font-size:0.78rem; font-weight:700;">
-                        <span>🔑 API Key Active</span>
-                    </div>
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; padding:5px 12px; border-radius:20px; font-size:0.78rem; font-weight:700;">
-                        <span>🛡️ Security Review</span>
-                    </div>
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:#F8FAFC; border:1px solid #E2E8F0; color:#475569; padding:5px 12px; border-radius:20px; font-size:0.78rem; font-weight:600;">
-                        <span>✓ Setup</span>
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
         # ── 2. Stepper Graphics & Interactive Stage Tabs (Matching Image 1) ──
         s1_active = (curr_stage == 1)
         s2_active = (curr_stage == 2)
@@ -1751,7 +1745,6 @@ if menu_option == "🔍 Search & Quote Candidate":
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
                         <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Agency (Monday):</span><br><b>{agency_db}</b></div>
                         <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">State / ZIP Code:</span><br><b>{state_db} ({zip_db})</b></div>
-                        <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Exchange Authority:</span><br><b>{'Covered California' if is_california else 'HealthCare.gov Marketplace'}</b></div>
                         <div><span style="color:#64748B; font-size:0.75rem; font-weight:600; text-transform:uppercase;">Preferred Carrier:</span><br><b>{carrier_db}</b></div>
                     </div>
                 </div>
@@ -1759,14 +1752,16 @@ if menu_option == "🔍 Search & Quote Candidate":
                 unsafe_allow_html=True
             )
 
+            fechas_disponibles = generar_fechas_efectivas_futuras()
+            idx_eff_s1 = fechas_disponibles.index(eff_date) if eff_date in fechas_disponibles else 0
             c_eff_s1, c_space_s1 = st.columns([1.5, 2])
             with c_eff_s1:
-                new_eff = st.date_input(
+                new_eff = st.selectbox(
                     "Target Coverage Effective Date:",
-                    value=eff_date,
-                    min_value=date(2025, 1, 1),
-                    max_value=date(2027, 12, 31),
-                    key=f"eff_input_{cand_key}",
+                    options=fechas_disponibles,
+                    index=idx_eff_s1,
+                    format_func=lambda d: d.strftime("%Y/%m/01"),
+                    key=f"eff_sel_s1_{cand_key}",
                     help="ACA rate curves depend on the candidate's exact age on the first day of coverage."
                 )
                 if new_eff != eff_date:
@@ -1801,14 +1796,17 @@ if menu_option == "🔍 Search & Quote Candidate":
                 unsafe_allow_html=True
             )
 
+            fechas_disponibles = generar_fechas_efectivas_futuras()
+            idx_eff_s2 = fechas_disponibles.index(eff_date) if eff_date in fechas_disponibles else 0
             c_eff1, c_eff2, c_eff3 = st.columns([1.5, 1.5, 1.2])
             with c_eff1:
-                new_eff = st.date_input(
+                new_eff = st.selectbox(
                     "Target Coverage Effective Date:",
-                    value=eff_date,
-                    min_value=date(2025, 1, 1),
-                    max_value=date(2027, 12, 31),
-                    key=f"eff_s2_{cand_key}"
+                    options=fechas_disponibles,
+                    index=idx_eff_s2,
+                    format_func=lambda d: d.strftime("%Y/%m/01"),
+                    key=f"eff_sel_s2_{cand_key}",
+                    help="ACA rate curves depend on the candidate's exact age on the first day of coverage."
                 )
                 if new_eff != eff_date:
                     st.session_state[eff_date_key] = new_eff
