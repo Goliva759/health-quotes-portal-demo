@@ -150,24 +150,37 @@ st.markdown(
             box-shadow: 0 2px 6px rgba(28, 35, 122, 0.08) !important;
         }
 
-        /* ── BOTÓN ESTRELLA / HERO CTA (ÚNICAMENTE SUBIR A MONDAY Y SYNC CRM) ── */
+        /* ── BOTÓN PRIMARIO Y ACCIONES PRINCIPALES (AZUL MARINO SÓLIDO #1C237A) ── */
+        button[kind="primary"],
+        div[data-testid="stBaseButton-primary"] button,
         .st-key-btn_upload_monday button,
+        .st-key-btn_download_pdf button,
         .st-key-btn_sync_changes_crm button {
-            background: linear-gradient(115deg, #1C237A 0%, #631C82 50%, #EB3C96 100%) !important;
+            background: #1C237A !important;
+            background-color: #1C237A !important;
+            background-image: none !important;
             color: #FFFFFF !important;
-            border: none !important;
-            box-shadow: 0 3px 12px rgba(99, 28, 130, 0.25) !important;
+            border: 1px solid #1C237A !important;
+            border-radius: 8px !important;
+            font-weight: 700 !important;
+            box-shadow: 0 2px 6px rgba(28, 35, 122, 0.22) !important;
+            transition: all 0.18s ease-in-out !important;
         }
+        button[kind="primary"]:hover,
+        div[data-testid="stBaseButton-primary"] button:hover,
         .st-key-btn_upload_monday button:hover,
+        .st-key-btn_download_pdf button:hover,
         .st-key-btn_sync_changes_crm button:hover {
-            box-shadow: 0 5px 18px rgba(235, 60, 150, 0.38) !important;
+            background: #121752 !important;
+            background-color: #121752 !important;
+            border-color: #121752 !important;
+            color: #FFFFFF !important;
             transform: translateY(-1px) !important;
-            filter: brightness(1.06) !important;
+            box-shadow: 0 4px 12px rgba(28, 35, 122, 0.3) !important;
         }
 
-        /* ── BOTÓN SECUNDARIO OUTLINED (UPDATE DETAILS, DOWNLOAD PDF, REFRESH) ── */
+        /* ── BOTÓN SECUNDARIO OUTLINED (UPDATE DETAILS, REFRESH) ── */
         .st-key-btn_update_candidate button,
-        .st-key-btn_download_pdf button,
         .st-key-btn_refresh_crm button {
             background: #FFFFFF !important;
             color: #1C237A !important;
@@ -322,9 +335,14 @@ if "andreap" in USERS:
 
 MONDAY_API_KEY = SECRETS.get("monday", {}).get("api_token") or os.environ.get("MONDAY_API_TOKEN", "")
 MONDAY_BOARD_ID = str(SECRETS.get("monday", {}).get("board_id") or os.environ.get("MONDAY_BOARD_ID", "18400693607"))
-MARKETPLACE_API_KEY = str(SECRETS.get("marketplace", {}).get("api_key") or os.environ.get("MARKETPLACE_API_KEY", "hDTLRancti7OgWH0QEQk9ew5y7exSsXe")).strip()
-HEALTHSHERPA_API_KEY = str(SECRETS.get("healthsherpa", {}).get("api_key") or os.environ.get("HEALTHSHERPA_API_KEY", "")).strip()
-HEALTHSHERPA_BASE_URL = str(SECRETS.get("healthsherpa", {}).get("base_url") or os.environ.get("HEALTHSHERPA_BASE_URL", "https://api.one.healthsherpa.com")).strip()
+HEALTHSHERPA_API_KEY = str(
+    SECRETS.get("healthsherpa", {}).get("api_key")
+    or os.environ.get("HEALTHSHERPA_API_KEY", "hs1d97b8327d7a1acfb8ba498fe31523d2e50c900cc76b99d0cfdd041d920")
+).strip()
+HEALTHSHERPA_BASE_URL = str(
+    SECRETS.get("healthsherpa", {}).get("base_url")
+    or os.environ.get("HEALTHSHERPA_BASE_URL", "https://api.one.healthsherpa.com")
+).strip()
 
 def verify_login():
     u = st.session_state.get("input_user", "").strip().lower()
@@ -461,7 +479,7 @@ def init_and_migrate_db():
         CREATE TABLE IF NOT EXISTS chicas_excel (
             id_cliente {id_pk}, nombre_gc TEXT UNIQUE, edad INTEGER, estado TEXT,
             codigo_postal TEXT, compania_seguros TEXT, agencia TEXT, hospital_preferido TEXT,
-            doctor_preferido TEXT, embarazada TEXT DEFAULT 'No', plan_actual TEXT DEFAULT 'Ninguno',
+            doctor_preferido TEXT, embarazada TEXT DEFAULT 'No', plan_actual TEXT DEFAULT 'None',
             monday_item_id TEXT, enrollment_status TEXT DEFAULT 'Pending'
         )
     ''')
@@ -473,7 +491,7 @@ def init_and_migrate_db():
     ''')
     columns_to_add = [
         ("agencia", "TEXT"), ("hospital_preferido", "TEXT"), ("doctor_preferido", "TEXT"),
-        ("embarazada", "TEXT DEFAULT 'No'"), ("plan_actual", "TEXT DEFAULT 'Ninguno'"),
+        ("embarazada", "TEXT DEFAULT 'No'"), ("plan_actual", "TEXT DEFAULT 'None'"),
         ("monday_item_id", "TEXT"), ("enrollment_status", "TEXT DEFAULT 'Pending'"),
         ("fecha_nacimiento", "TEXT")
     ]
@@ -483,6 +501,11 @@ def init_and_migrate_db():
             conn.commit()
         except Exception:
             pass
+    try:
+        cursor.execute("UPDATE chicas_excel SET plan_actual = 'None' WHERE plan_actual = 'Ninguno' OR plan_actual IS NULL")
+        conn.commit()
+    except Exception:
+        pass
     try:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_chicas_agencia ON chicas_excel(agencia)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_chicas_monday ON chicas_excel(monday_item_id)")
@@ -580,383 +603,153 @@ def resolver_marketplace_por_estado(state_str, zip_code=""):
     }
     return portales_estatales.get(st_clean, "Marketplace (HealthCare.gov)")
 
-def obtener_tipo_red_anthem_ca(zip_code):
-    """
-    Determina si Anthem Blue Cross opera como HMO o EPO en California según el mapa oficial:
-    - Pathway HMO: Los Angeles, Orange, San Diego, Riverside, San Bernardino, Fresno, Kings
-    - Pathway EPO: Todo el resto de California (Sacramento, San Francisco, Contra Costa, Santa Clara, Kern, etc.)
-    """
-    z_clean = str(zip_code or "").strip()
-    if len(z_clean) < 3:
-        return "HMO"
-    prefix3 = z_clean[:3]
-    hmo_prefixes = {
-        # Los Angeles: 900-908, 910-918, 935
-        "900","901","902","903","904","905","906","907","908",
-        "910","911","912","913","914","915","916","917","918","935",
-        # Orange: 926-928
-        "926","927","928",
-        # San Diego: 919-921
-        "919","920","921",
-        # Riverside & San Bernardino (Inland Empire): 922, 923, 924, 925
-        "922","923","924","925",
-        # Fresno & Kings: 936, 937, 938, y 932 (Kings Co.)
-        "936","937","938","932"
-    }
-    if prefix3 in hmo_prefixes:
-        return "HMO"
-    return "EPO"
-
-def calcular_factor_edad_ca(age_int, tier="silver"):
-    """
-    Curva actuarial Covered California (ACA Standard Curve) calibrada para 2026 normalizada a base 27 = 1.0000.
-    Garantiza exactitud al centavo para cada nivel de metal.
-    """
-    if age_int == 32:
-        t_clean = str(tier).lower()
-        if "gold" in t_clean:
-            return 1.116862
-        elif "plat" in t_clean:
-            return 1.116789
-        else:
-            return 1.116912
-
-    aca_factors = {
-        18: 0.835 / 1.048, 19: 0.835 / 1.048, 20: 0.835 / 1.048,
-        21: 1.000 / 1.048, 22: 1.000 / 1.048, 23: 1.000 / 1.048, 24: 1.000 / 1.048,
-        25: 0.95178,       26: 1.024 / 1.048, 27: 1.0000,
-        28: 1.087 / 1.048, 29: 1.119 / 1.048, 30: 1.135 / 1.048,
-        31: 1.151 / 1.048, 32: 1.11691,       33: 1.198 / 1.048,
-        34: 1.214 / 1.048, 35: 1.222 / 1.048, 36: 1.230 / 1.048,
-        37: 1.238 / 1.048, 38: 1.246 / 1.048, 39: 1.262 / 1.048,
-        40: 1.278 / 1.048, 41: 1.302 / 1.048, 42: 1.325 / 1.048,
-        43: 1.357 / 1.048, 44: 1.397 / 1.048, 45: 1.444 / 1.048,
-    }
-    if age_int in aca_factors:
-        return aca_factors[age_int]
-    if age_int < 27:
-        return max(0.65, 1.0 - (27 - age_int) * 0.024)
-    return 1.0 + (age_int - 27) * 0.024
-
-
 # ==============================================================================
-# 5.1 CONECTOR OFICIAL CMS HEALTHCARE.GOV (MARKETPLACE API)
+# 5.1 MOTOR EXCLUSIVO DE COTIZACIÓN: HEALTHSHERPA ONE API
 # ==============================================================================
-def format_single_marketplace_plan(p):
-    p_issuer = str(p.get("issuer", {}).get("name", "")).strip()
-    p_full_name = str(p.get("name", "Marketplace Plan")).strip()
-    ml = str(p.get("metal_level", "")).strip()
-
-    p_issuer = p_issuer.replace("\ufffd", "").replace("®", "").strip()
-    p_full_name = p_full_name.replace("\ufffd", "").replace("®", "").strip()
-
-    # Usar directamente el nombre comercial limpio del plan (sin anteponer el nombre corporativo)
-    display_name = re.sub(r'\s+', ' ', p_full_name).strip()
-
-    prem_num = float(p.get("premium") or 0.0)
-
-    ded_num = 0
-    ded_list = p.get("deductibles", [])
-    if ded_list and isinstance(ded_list, list):
-        ded_num = ded_list[0].get("amount") or 0
-
-    oop_num = 0
-    moop_list = p.get("moops", [])
-    if moop_list and isinstance(moop_list, list):
-        oop_num = moop_list[0].get("amount") or 0
-
-    pcp_c = None
-    spec_c = None
-    for b in p.get("benefits", []):
-        b_name = str(b.get("name", "")).lower()
-        cs_list = b.get("cost_sharings", [])
-        in_net_cs = next((cs for cs in cs_list if cs.get("network_tier") == "In-Network"), None)
-        if in_net_cs:
-            disp = in_net_cs.get("display_string", "").strip()
-            if "primary care" in b_name and not pcp_c:
-                pcp_c = f"${in_net_cs.get('copay_amount')} copay" if in_net_cs.get('copay_amount') else disp
-            elif "specialist" in b_name and not spec_c:
-                spec_c = f"${in_net_cs.get('copay_amount')} copay" if in_net_cs.get('copay_amount') else disp
-
-    if ml == "Bronze":
-        pcp_c = pcp_c or "$0 after ded"
-        spec_c = spec_c or "$0 after ded"
-        labs_c, xrays_c = "$0 after ded", "0% after ded"
-        ch_p, ch_f = "0% after ded", "0% after ded"
-    elif ml == "Gold":
-        pcp_c = pcp_c or "$25 copay"
-        spec_c = spec_c or "$50 copay"
-        labs_c, xrays_c = "$25 copay", "20% coinsurance"
-        ch_p, ch_f = "20% coinsurance", "20% coinsurance"
-    elif ml == "Platinum":
-        pcp_c = pcp_c or "$15 copay"
-        spec_c = spec_c or "$30 copay"
-        labs_c, xrays_c = "$15 copay", "10% coinsurance"
-        ch_p, ch_f = "10% coinsurance", "10% coinsurance"
-    else:
-        pcp_c = pcp_c or "$45 copay"
-        spec_c = spec_c or "$85 copay"
-        labs_c, xrays_c = "$45 copay", "30% coinsurance"
-        ch_p, ch_f = "30% coinsurance", "30% coinsurance"
-
-    return {
-        "id": p.get("id"),
-        "name": display_name,
-        "raw_name": p_full_name,
-        "issuer": p_issuer,
-        "metal": ml if ml else "Standard",
-        "prem": f"${prem_num:,.2f}",
-        "prem_val": prem_num,
-        "ded": f"${ded_num:,}" if ded_num else "$0",
-        "oop": f"${oop_num:,}" if oop_num else "$9,200",
-        "pcp": pcp_c,
-        "spec": spec_c,
-        "labs": labs_c,
-        "xrays": xrays_c,
-        "office_visits": "No charge",
-        "cb_phys": ch_p,
-        "cb_fac": ch_f,
-        "lien": "Yes",
-        "benefits_url": p.get("benefits_url") or "",
-        "brochure_url": p.get("brochure_url") or "",
-        "network_url": p.get("network_url") or ""
-    }
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_marketplace_plans(zipcode, age, gender="Female", carrier_pref=None, _cache_version="v3"):
-    if not MARKETPLACE_API_KEY:
-        return False, [], None, None, []
-    zip_clean = str(zipcode or "").strip()
-    if not zip_clean or len(zip_clean) < 5 or not zip_clean[:5].isdigit():
-        return False, [], None, None, []
-    zip5 = zip_clean[:5]
-    base_url = "https://marketplace.api.healthcare.gov/api/v1"
-
-    # 1. Obtener condado y FIPS por código postal
-    try:
-        url_county = f"{base_url}/counties/by/zip/{zip5}?apikey={MARKETPLACE_API_KEY}"
-        resp_c = requests.get(url_county, timeout=8)
-        if resp_c.status_code != 200:
-            return False, [], None, None, []
-        data_c = resp_c.json()
-        counties = data_c.get("counties", [])
-        if not counties:
-            return False, [], None, None, []
-        county = counties[0]
-        county_fips = county.get("fips")
-        state = county.get("state")
-        county_name = county.get("name")
-    except Exception:
-        return False, [], None, None, []
-
-    # California es atendida exclusivamente por su motor actuarial nativo (Covered CA)
-    if state == "CA":
-        return False, [], "CA", county_name, []
-
-    # 2. Buscar planes oficiales con paginación paralela para catálogo completo
-    try:
-        search_url = f"{base_url}/plans/search?apikey={MARKETPLACE_API_KEY}"
-        age_int = int(age) if str(age).isdigit() else 27
-        body = {
-            "household": {
-                "income": 50000,
-                "people": [
-                    {
-                        "age": age_int,
-                        "aptc_eligible": False,
-                        "gender": "Female",
-                        "uses_tobacco": False
-                    }
-                ]
-            },
-            "market": "Individual",
-            "place": {
-                "countyfips": county_fips,
-                "state": state,
-                "zipcode": zip5
-            },
-            "year": 2025
-        }
-        resp_p = requests.post(search_url, json=body, timeout=12)
-        if resp_p.status_code != 200:
-            body["year"] = 2024
-            resp_p = requests.post(search_url, json=body, timeout=12)
-            if resp_p.status_code != 200:
-                return False, [], state, county_name, []
-
-        data_p = resp_p.json()
-        raw_plans = data_p.get("plans", [])
-        total_plans = data_p.get("total", len(raw_plans))
-
-        if total_plans > len(raw_plans):
-            offsets = list(range(10, min(total_plans, 70), 10))
-            def _fetch_offset(off):
-                try:
-                    b_copy = dict(body)
-                    b_copy["offset"] = off
-                    r_off = requests.post(search_url, json=b_copy, timeout=10)
-                    if r_off.status_code == 200:
-                        return r_off.json().get("plans", [])
-                except Exception:
-                    pass
-                return []
-
-            with ThreadPoolExecutor(max_workers=min(len(offsets), 6)) as executor:
-                for page_plans in executor.map(_fetch_offset, offsets):
-                    raw_plans.extend(page_plans)
-
-        if not raw_plans:
-            return False, [], state, county_name, []
-
-        seen_ids = set()
-        unique_raw = []
-        for p in raw_plans:
-            pid = p.get("id") or (p.get("name"), p.get("premium"))
-            if pid not in seen_ids:
-                seen_ids.add(pid)
-                unique_raw.append(p)
-
-        all_formatted = [format_single_marketplace_plan(p) for p in unique_raw]
-
-        # 3. Selección equilibrada por defecto (respetando aseguradora de Monday si existe)
-        carrier_target = str(carrier_pref or "").strip().lower()
-        matched_pool = []
-        if carrier_target and carrier_target not in ["no preference", "none", "n/a", "no", "anthem"]:
-            tokens = [t for t in carrier_target.replace("/", " ").replace("-", " ").split() if len(t) > 2]
-            for p in all_formatted:
-                iss_str = p["issuer"].lower()
-                pln_str = p["name"].lower()
-                if any(t in iss_str or t in pln_str for t in tokens):
-                    matched_pool.append(p)
-
-        candidate_pool = matched_pool if matched_pool else all_formatted
-
-        categorized = {"Bronze": [], "Silver": [], "Gold": [], "Platinum": [], "Other": []}
-        for p in candidate_pool:
-            ml = p.get("metal", "Other")
-            if ml in categorized:
-                categorized[ml].append(p)
-            else:
-                categorized["Other"].append(p)
-
-        selected_default = []
-        for lvl in ["Bronze", "Silver", "Gold", "Platinum"]:
-            if categorized[lvl]:
-                selected_default.append(categorized[lvl][0])
-
-        for p in candidate_pool:
-            if p not in selected_default:
-                selected_default.append(p)
-            if len(selected_default) >= 5:
-                break
-
-        return True, selected_default, state, county_name, all_formatted
-    except Exception:
-        return False, [], state, county_name, []
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def fetch_unified_plans(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, _cache_ver="hs_v1"):
+@st.cache_data(ttl=900, show_spinner=False)
+def _fetch_unified_plans_cached(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v5"):
     """
-    Unified enterprise quoting engine:
-    1. Primary: HealthSherpa One API (Exact FIPS Rating Areas, Gross & Net Premium, Documents)
-    2. Fallback: HealthCare.gov Marketplace API
+    Motor oficial de cotizaciones HealthSherpa One API (Caché inteligente de éxito):
+    - Precios 100% reales directo de aseguradoras (Kaiser, Anthem, Blue Shield, etc.)
+    - Solo almacena en caché respuestas con planes activos reales; nunca almacena fallos ni listas vacías.
     """
     if healthsherpa_service and HEALTHSHERPA_API_KEY:
-        try:
-            target_fips = fips_code
-            target_state = state_code
-            if not target_fips:
-                counties = healthsherpa_service.lookup_counties(zipcode, HEALTHSHERPA_API_KEY, base_url=HEALTHSHERPA_BASE_URL)
-                if counties and isinstance(counties, list):
-                    target_fips = counties[0].get("fips_code") or counties[0].get("fips")
-                    target_state = target_state or counties[0].get("state")
+        target_fips = fips_code
+        target_state = state_code
+        if not target_fips or not target_state:
+            counties = healthsherpa_service.lookup_counties(zipcode, HEALTHSHERPA_API_KEY, base_url=HEALTHSHERPA_BASE_URL)
+            if counties and isinstance(counties, list) and len(counties) > 0:
+                target_fips = target_fips or counties[0].get("fips_code") or counties[0].get("fips")
+                target_state = target_state or counties[0].get("state")
 
-            if target_fips:
-                hs_res = healthsherpa_service.quote_plans(
-                    zip_code=zipcode,
-                    fips_code=target_fips,
-                    state=target_state or "FL",
-                    age=age,
-                    api_key=HEALTHSHERPA_API_KEY,
-                    pregnant=pregnant,
-                    provider_npis=provider_npis,
-                    base_url=HEALTHSHERPA_BASE_URL
-                )
-                if hs_res.get("success") and hs_res.get("plans"):
-                    all_formatted = []
-                    for p in hs_res["plans"]:
-                        g_prem = p.get("gross_premium", 0.0)
-                        n_prem = p.get("net_premium", 0.0)
-                        urls = p.get("urls", {}) or {}
-                        all_formatted.append({
-                            "id": p.get("hios_id") or p.get("id"),
-                            "name": p.get("name"),
-                            "issuer": p.get("issuer"),
-                            "metal": p.get("metal_level"),
-                            "plan_type": p.get("plan_type"),
-                            "prem": f"${g_prem:,.2f}",
-                            "prem_val": g_prem,
-                            "net_prem": f"${n_prem:,.2f}",
-                            "net_prem_val": n_prem,
-                            "subsidy": p.get("subsidy_applied", 0.0),
-                            "ded": str(p.get("deductible", "$0")),
-                            "oop": str(p.get("moop", "$9,200")),
-                            "pcp": "Standard Copay",
-                            "spec": "Standard Specialist",
-                            "labs": "Covered in Tier",
-                            "xrays": "Standard Diagnostic",
-                            "office_visits": "Covered",
-                            "cb_phys": "Standard In-Network",
-                            "cb_fac": "Standard In-Network",
-                            "lien": "Yes",
-                            "benefits_url": urls.get("summary_of_benefits") or "",
-                            "brochure_url": urls.get("brochure") or "",
-                            "formulary_url": urls.get("formulary") or "",
-                            "network_url": urls.get("provider_directory") or "",
-                            "providers": p.get("providers", {}),
-                            "deeplink_enrollment": p.get("deeplink_enrollment", False),
-                            "engine": "HealthSherpa One"
-                        })
+        hs_res = healthsherpa_service.quote_plans(
+            zip_code=zipcode,
+            fips_code=target_fips,
+            state=target_state or "CA",
+            age=int(age),
+            api_key=HEALTHSHERPA_API_KEY,
+            pregnant=pregnant,
+            effective_date=effective_date,
+            provider_npis=provider_npis,
+            base_url=HEALTHSHERPA_BASE_URL
+        )
+        if hs_res.get("success") and hs_res.get("plans"):
+            all_formatted = []
+            for p in hs_res["plans"]:
+                g_prem = float(p.get("gross_premium", 0.0) or p.get("net_premium", 0.0) or p.get("prem_val", 0.0))
+                urls = p.get("urls", {}) or {}
+                sbc_doc = p.get("benefits_url") or urls.get("sbc") or urls.get("summary_of_benefits") or ""
+                all_formatted.append({
+                    "id": str(p.get("hios_id") or p.get("id")),
+                    "name": p.get("name"),
+                    "issuer": p.get("issuer"),
+                    "metal": p.get("metal_level") or p.get("metal") or "Bronze",
+                    "plan_type": p.get("plan_type"),
+                    "prem": f"${g_prem:,.2f}",
+                    "prem_val": g_prem,
+                    "gross_prem_val": g_prem,
+                    "net_prem": f"${g_prem:,.2f}",
+                    "net_prem_val": g_prem,
+                    "subsidy": 0.0,
+                    "ded": str(p.get("deductible", p.get("ded", "$0"))),
+                    "oop": str(p.get("moop", p.get("oop", "$9,200"))),
+                    "pcp": str(p.get("pcp", "$50 copay")),
+                    "spec": str(p.get("spec", "$90 copay")),
+                    "rx": str(p.get("rx", "$15 copay")),
+                    "emergency_room": str(p.get("emergency_room", "$350 copay")),
+                    "urgent_care": str(p.get("urgent_care", "$60 copay")),
+                    "ambulance": str(p.get("ambulance", "$250 copay")),
+                    "labs": str(p.get("labs", "Covered in Tier")),
+                    "xrays": str(p.get("xrays", "Standard Diagnostic")),
+                    "office_visits": str(p.get("office_visits", "Covered")),
+                    "cb_phys": str(p.get("cb_phys", "Standard In-Network")),
+                    "cb_fac": str(p.get("cb_fac", "Standard In-Network")),
+                    "lien": p.get("lien", "No"),
+                    "benefits_url": sbc_doc,
+                    "brochure_url": urls.get("brochure") or p.get("brochure_url", ""),
+                    "formulary_url": urls.get("formulary") or p.get("formulary_url", ""),
+                    "network_url": urls.get("provider_directory") or urls.get("network") or p.get("network_url", ""),
+                    "providers": p.get("providers", {}),
+                    "deeplink_enrollment": p.get("deeplink_enrollment", False),
+                    "engine": "HealthSherpa One"
+                })
 
-                    carrier_target = str(carrier_pref or "").strip().lower()
-                    matched_pool = []
-                    if carrier_target and carrier_target not in ["no preference", "none", "n/a", "no", "anthem"]:
-                        tokens = [t for t in carrier_target.replace("/", " ").replace("-", " ").split() if len(t) > 2]
-                        for p in all_formatted:
-                            iss_str = p["issuer"].lower()
-                            pln_str = p["name"].lower()
-                            if any(t in iss_str or t in pln_str for t in tokens):
-                                matched_pool.append(p)
+            carrier_target = str(carrier_pref or "").strip().lower()
+            matched_pool = []
+            if carrier_target and carrier_target not in ["no preference", "none", "n/a", "no", "anthem"]:
+                tokens = [t for t in carrier_target.replace("/", " ").replace("-", " ").split() if len(t) > 2]
+                for p in all_formatted:
+                    iss_str = p["issuer"].lower()
+                    pln_str = p["name"].lower()
+                    if any(t in iss_str or t in pln_str for t in tokens):
+                        matched_pool.append(p)
 
-                    candidate_pool = matched_pool if matched_pool else all_formatted
-                    categorized = {"Bronze": [], "Silver": [], "Gold": [], "Platinum": [], "Other": []}
-                    for p in candidate_pool:
-                        ml = p.get("metal", "Other")
-                        matched_cat = "Other"
-                        for c_tier in categorized.keys():
-                            if c_tier.lower() in ml.lower():
-                                matched_cat = c_tier
-                                break
-                        categorized[matched_cat].append(p)
+            candidate_pool = matched_pool if matched_pool else all_formatted
+            categorized = {"Bronze": [], "Silver": [], "Gold": [], "Platinum": [], "Other": []}
+            for p in candidate_pool:
+                ml = p.get("metal", "Other")
+                matched_cat = "Other"
+                for c_tier in categorized.keys():
+                    if c_tier.lower() in ml.lower():
+                        matched_cat = c_tier
+                        break
+                categorized[matched_cat].append(p)
 
-                    selected_default = []
-                    for lvl in ["Bronze", "Silver", "Gold", "Platinum"]:
-                        if categorized[lvl]:
-                            selected_default.append(categorized[lvl][0])
-                    for p in candidate_pool:
-                        if p not in selected_default:
-                            selected_default.append(p)
-                        if len(selected_default) >= 5:
-                            break
+            selected_default = []
+            for lvl in ["Bronze", "Silver", "Gold", "Platinum"]:
+                if categorized[lvl]:
+                    selected_default.append(categorized[lvl][0])
+            for p in candidate_pool:
+                if p not in selected_default:
+                    selected_default.append(p)
+                if len(selected_default) >= 5:
+                    break
 
-                    return True, selected_default, target_state, target_fips, all_formatted, "HealthSherpa One"
-        except Exception:
-            pass
+            return True, selected_default, target_state, target_fips, all_formatted, "HealthSherpa One"
 
-    ok, def_p, st_api, co_api, all_p = fetch_marketplace_plans(zipcode, age, carrier_pref=carrier_pref)
-    return ok, def_p, st_api, co_api, all_p, "HealthCare.gov (Fallback)"
+    raise RuntimeError("HealthSherpa One API did not return plans for this query.")
+
+
+def fetch_unified_plans(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v5"):
+    try:
+        return _fetch_unified_plans_cached(
+            zipcode=zipcode,
+            age=age,
+            fips_code=fips_code,
+            state_code=state_code,
+            pregnant=pregnant,
+            carrier_pref=carrier_pref,
+            provider_npis=provider_npis,
+            effective_date=effective_date,
+            _cache_ver=_cache_ver
+        )
+    except Exception:
+        # Avoid caching temporary empty responses so next retry executes live
+        return False, [], state_code or "CA", fips_code or "", [], "HealthSherpa One"
+
+
+def obtener_cotizaciones_healthsherpa(zip_code, age, income=0, household_size=1, effective_date=None, pregnant=False, fips_code=None, state_code=None, carrier_pref=None):
+    """
+    Submits quotes to HealthSherpa One API strictly without subsidies (for surrogate mothers).
+    Single source of truth for all ACA and private carrier quotes across all states.
+    """
+    if not healthsherpa_service or not HEALTHSHERPA_API_KEY:
+        return {"plans": [], "engine": "HealthSherpa One"}
+    try:
+        ok, def_p, st_api, co_api, all_p, eng = fetch_unified_plans(
+            zipcode=zip_code,
+            age=age,
+            fips_code=fips_code,
+            state_code=state_code,
+            pregnant=pregnant,
+            carrier_pref=carrier_pref,
+            effective_date=effective_date
+        )
+        if ok and all_p:
+            return {"plans": all_p, "engine": eng}
+    except Exception:
+        pass
+    return {"plans": [], "engine": "HealthSherpa One"}
 
 
 def get_monday_headers():
@@ -1178,6 +971,8 @@ def resolver_hospital_preferido(hospital_input, lista_base):
 # ==============================================================================
 def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pref, hosp_in_net, doc_in_net, pregnant, current_plan, plans):
     buffer = BytesIO()
+    if not plans:
+        return buffer
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
 
@@ -1247,6 +1042,9 @@ def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pre
         [Paragraph("<b>Max Out of pocket</b>", style_bold)]  + [Paragraph(p['oop_max'], style_purple_sub) for p in plans],
         [Paragraph("Primary Care Physician", style_normal)]  + [Paragraph(p.get('pcp', '$50 copay'), style_normal) for p in plans],
         [Paragraph("Specialist", style_normal)]              + [Paragraph(p.get('specialist', '$90 copay'), style_normal) for p in plans],
+        [Paragraph("Emergency Services", style_normal)]      + [Paragraph(p.get('emergency_room', '$350 copay'), style_normal) for p in plans],
+        [Paragraph("Urgent Care", style_normal)]             + [Paragraph(p.get('urgent_care', '$60 copay'), style_normal) for p in plans],
+        [Paragraph("Ambulance", style_normal)]               + [Paragraph(p.get('ambulance', '$250 copay'), style_normal) for p in plans],
         [Paragraph("Labs", style_normal)]                    + [Paragraph(p.get('labs', '$50 copay'), style_normal) for p in plans],
         [Paragraph("X-Rays", style_normal)]                  + [Paragraph(p.get('xrays', '40% coinsurance'), style_normal) for p in plans],
         [Paragraph("Office Visits", style_normal)]           + [Paragraph("No charge", style_normal) for _ in plans],
@@ -1256,7 +1054,8 @@ def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pre
         [Paragraph(str(p.get('lien', 'Yes')), ParagraphStyle('WhtC', parent=style_normal, textColor=colors.white, alignment=1)) for p in plans],
     ])
 
-    col_w = [150] + [int(400 / len(plans))] * len(plans)
+    len_p = max(1, len(plans))
+    col_w = [150] + [int(400 / len_p)] * len_p
     t_quote = Table(matrix_data, colWidths=col_w)
     t_quote.setStyle(TableStyle([
         ('BACKGROUND', (1, 0),  (-1, 0),  colors.HexColor('#2A0845')),
@@ -1634,7 +1433,7 @@ if menu_option == "🔍 Search & Quote Candidate":
 
     if selected_candidate != st.session_state["last_selected_cand"]:
         for k in list(st.session_state.keys()):
-            if k.startswith("plan_") or k.startswith("num_plans_") or k.startswith("sel_api_") or k.startswith("carrier_filt_"):
+            if k.startswith("plan_") or k.startswith("num_plans_") or k.startswith("sel_api_") or k.startswith("carrier_filt_") or k.startswith("quoting_stage_"):
                 del st.session_state[k]
         st.session_state["last_selected_cand"] = selected_candidate
 
@@ -1656,7 +1455,11 @@ if menu_option == "🔍 Search & Quote Candidate":
         hospital_pref = c_dict.get('hospital_preferido') or c_dict.get('hospital_pref', '')
         obgyn_pref    = c_dict.get('doctor_preferido') or c_dict.get('doctor_pref', '')
         pregnant      = c_dict.get('embarazada', 'No')
-        current_plan  = c_dict.get('plan_actual', 'None')
+        current_plan_raw = c_dict.get('plan_actual') or 'None'
+        if str(current_plan_raw).strip().lower() in ['ninguno', 'ninguna', 'sin plan', 'null', 'none', '']:
+            current_plan = 'None'
+        else:
+            current_plan = str(current_plan_raw).strip()
         item_id       = c_dict.get('monday_item_id', '')
 
         cand_key = selected_candidate.replace(" ", "_")
@@ -1683,74 +1486,123 @@ if menu_option == "🔍 Search & Quote Candidate":
         # Stage management (Stage 1: Location, Stage 2: Household, Stage 3: ACA Quotes)
         stage_key = f"quoting_stage_{cand_key}"
         if stage_key not in st.session_state:
-            st.session_state[stage_key] = 3
+            st.session_state[stage_key] = 1
         curr_stage = st.session_state[stage_key]
 
-        # ── 2. Stepper Graphics & Interactive Stage Tabs (Matching Image 1) ──
+        # ── 2. Interactive Visual Stepper Navigation (Matching User Reference Image Exactly) ──
         s1_active = (curr_stage == 1)
         s2_active = (curr_stage == 2)
         s3_active = (curr_stage == 3)
 
-        s1_box = "border:1px solid #BFDBFE; background:#EFF6FF; border-radius:12px; padding:6px 14px; box-shadow:0 1px 4px rgba(37,99,235,0.08);" if s1_active else ""
-        s2_box = "border:1px solid #BFDBFE; background:#EFF6FF; border-radius:12px; padding:6px 14px; box-shadow:0 1px 4px rgba(37,99,235,0.08);" if s2_active else ""
-        s3_box = "border:1px solid #BFDBFE; background:#EFF6FF; border-radius:12px; padding:6px 14px; box-shadow:0 1px 4px rgba(37,99,235,0.08);" if s3_active else ""
+        line1_color = "#10B981" if curr_stage >= 2 else "#E2E8F0"
+        line2_color = "#10B981" if curr_stage >= 3 else "#E2E8F0"
 
-        s1_icon_html = '<div style="background:#2563EB; color:#FFF; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">📍</div>' if s1_active else '<div style="background:#059669; color:#FFF; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:800;">✓</div>'
+        # Labels matching the user reference screenshot
+        if s1_active:
+            s1_label = "📍 **1. Location**\n\nZIP & County Resolution"
+        else:
+            s1_label = "✅ **1. Location**\n\nZIP & County Resolution" if curr_stage > 1 else "**1. Location**\n\nZIP & County Resolution"
 
-        s2_icon_html = '<div style="background:#2563EB; color:#FFF; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">👥</div>' if s2_active else ('<div style="background:#059669; color:#FFF; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:800;">✓</div>' if curr_stage > 2 else '<div style="background:#E2E8F0; color:#64748B; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">2</div>')
+        if s2_active:
+            s2_label = "👥 **2. Household**\n\nIncome & Demographics"
+        elif curr_stage > 2:
+            s2_label = "✅ **2. Household**\n\nIncome & Demographics"
+        else:
+            s2_label = "**2. Household**\n\nIncome & Demographics"
 
-        s3_icon_html = '<div style="background:#2563EB; color:#FFF; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">📄</div>' if s3_active else '<div style="background:#E2E8F0; color:#64748B; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700;">3</div>'
-
-        line1_color = "#10B981" if curr_stage >= 2 else "#CBD5E1"
-        line2_color = "#10B981" if curr_stage >= 3 else "#CBD5E1"
+        if s3_active:
+            s3_label = "📄 **3. ACA Quotes**\n\nPlans & Subsidies"
+        elif curr_stage == 3 or (len(st.session_state.get(f"sel_plan_ids_{cand_key}", [])) > 0):
+            s3_label = "✅ **3. ACA Quotes**\n\nPlans & Subsidies"
+        else:
+            s3_label = "**3. ACA Quotes**\n\nPlans & Subsidies"
 
         st.markdown(
-            f"""
-            <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; padding:12px 20px; margin-bottom:12px; box-shadow:0 2px 8px rgba(15,23,42,0.03); display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                <div style="display:flex; align-items:center; gap:10px; {s1_box}">
-                    {s1_icon_html}
-                    <div>
-                        <div style="font-weight:700; font-size:0.86rem; color:{'#1D4ED8' if s1_active else '#0F172A'};">1. Location</div>
-                        <div style="font-size:0.72rem; color:{'#2563EB' if s1_active else '#64748B'};">ZIP & County Resolution</div>
-                    </div>
-                </div>
-                <div style="flex:1; height:2px; background:{line1_color}; margin:0 8px;"></div>
-                <div style="display:flex; align-items:center; gap:10px; {s2_box}">
-                    {s2_icon_html}
-                    <div>
-                        <div style="font-weight:700; font-size:0.86rem; color:{'#1D4ED8' if s2_active else '#0F172A'};">2. Household</div>
-                        <div style="font-size:0.72rem; color:{'#2563EB' if s2_active else '#64748B'};">Income & Demographics</div>
-                    </div>
-                </div>
-                <div style="flex:1; height:2px; background:{line2_color}; margin:0 8px;"></div>
-                <div style="display:flex; align-items:center; gap:10px; {s3_box}">
-                    {s3_icon_html}
-                    <div>
-                        <div style="font-weight:700; font-size:0.86rem; color:{'#1D4ED8' if s3_active else '#0F172A'};">3. ACA Quotes</div>
-                        <div style="font-size:0.72rem; color:{'#2563EB' if s3_active else '#64748B'};">Plans & Subsidies</div>
-                    </div>
-                </div>
-            </div>
+            """
+            <style>
+            /* Stepper Outer Container matching screenshot */
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) {
+                background: #FFFFFF !important;
+                border: 1px solid #E2E8F0 !important;
+                border-radius: 14px !important;
+                padding: 10px 18px !important;
+                margin-bottom: 16px !important;
+                box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03) !important;
+                align-items: center !important;
+            }
+
+            /* Stepper Button Reset & Elevation */
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button {
+                background: transparent !important;
+                border: 1px solid transparent !important;
+                border-radius: 12px !important;
+                padding: 8px 14px !important;
+                text-align: left !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                justify-content: center !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                min-height: 56px !important;
+                transition: all 0.2s ease !important;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button:hover {
+                background: #F8FAFC !important;
+                border-color: #E2E8F0 !important;
+            }
+
+            /* Active Step Button - Light Blue Pill matching Image */
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button[kind="primary"] {
+                background: #EFF6FF !important;
+                border: 1.5px solid #BFDBFE !important;
+                box-shadow: 0 1px 6px rgba(37, 99, 235, 0.08) !important;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button p {
+                margin: 0 !important;
+                line-height: 1.35 !important;
+                font-size: 0.88rem !important;
+                color: #0F172A !important;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button[kind="primary"] p {
+                color: #1D4ED8 !important;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button p:last-child {
+                font-size: 0.72rem !important;
+                font-weight: 500 !important;
+                color: #64748B !important;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.stepper-visual-marker) button[kind="primary"] p:last-child {
+                color: #2563EB !important;
+            }
+            </style>
+            <div class="stepper-visual-marker" style="display:none;"></div>
             """,
             unsafe_allow_html=True
         )
 
-        col_st1, col_st2, col_st3 = st.columns(3)
-        with col_st1:
-            if st.button("📍 1. Location Details", key=f"nav_tab_1_{cand_key}", use_container_width=True, type="primary" if s1_active else "secondary"):
+        col_s1, col_l1, col_s2, col_l2, col_s3 = st.columns([3.4, 1.2, 3.4, 1.2, 3.4])
+        with col_s1:
+            if st.button(s1_label, key=f"nav_tab_1_{cand_key}", use_container_width=True, type="primary" if s1_active else "secondary"):
                 st.session_state[stage_key] = 1
                 st.rerun()
-        with col_st2:
-            if st.button("👥 2. Household & Demographics", key=f"nav_tab_2_{cand_key}", use_container_width=True, type="primary" if s2_active else "secondary"):
+        with col_l1:
+            st.markdown(f'<div style="height:2px; background:{line1_color}; margin-top:27px;"></div>', unsafe_allow_html=True)
+        with col_s2:
+            if st.button(s2_label, key=f"nav_tab_2_{cand_key}", use_container_width=True, type="primary" if s2_active else "secondary"):
                 st.session_state[stage_key] = 2
                 st.rerun()
-        with col_st3:
-            if st.button("📄 3. ACA Quotes & Plans", key=f"nav_tab_3_{cand_key}", use_container_width=True, type="primary" if s3_active else "secondary"):
+        with col_l2:
+            st.markdown(f'<div style="height:2px; background:{line2_color}; margin-top:27px;"></div>', unsafe_allow_html=True)
+        with col_s3:
+            if st.button(s3_label, key=f"nav_tab_3_{cand_key}", use_container_width=True, type="primary" if s3_active else "secondary"):
                 st.session_state[stage_key] = 3
                 st.rerun()
-
-        is_california = (str(state_db).strip().upper() == "CA" or 
-                         str(zip_db).strip().startswith(("90", "91", "92", "93", "94", "95", "96")))
 
         # ── STAGE 1: LOCATION RESOLUTION ──
         if curr_stage == 1:
@@ -1905,12 +1757,6 @@ if menu_option == "🔍 Search & Quote Candidate":
                     obgyn_pref = st.text_input("Preferred OB-GYN / Clinic:", value=obgyn_pref, placeholder="e.g. Dr. Ron Lichtenstein, Sharp Rees-Stealy...")
                     doc_in_net = st.checkbox("OB-GYN is In-Network", value=True)
 
-                col_npi1, col_npi2 = st.columns(2)
-                with col_npi1:
-                    hosp_npi = st.text_input("Hospital NPI (10 digits, optional):", key=f"hosp_npi_{cand_key}", placeholder="e.g. 1234567890")
-                with col_npi2:
-                    obgyn_npi = st.text_input("OB-GYN Provider NPI (10 digits, optional):", key=f"obgyn_npi_{cand_key}", placeholder="e.g. 1987654321")
-
                 col_sub1, col_sub2 = st.columns(2)
                 with col_sub1:
                     pregnant = st.selectbox("Currently Pregnant?", ["No", "Yes"], index=0 if pregnant == "No" else 1)
@@ -1918,11 +1764,12 @@ if menu_option == "🔍 Search & Quote Candidate":
                     current_plan = st.text_input("Current Plan (if any):", value=current_plan, placeholder="e.g. Kaiser Silver HMO, None...")
 
                 if st.button("Update Candidate Details", key="btn_update_candidate"):
+                    save_plan = "None" if str(current_plan).strip().lower() in ["ninguno", "ninguna", "sin plan", "none", ""] else str(current_plan).strip()
                     conn = get_db_connection()
                     conn.cursor().execute("""
                         UPDATE chicas_excel SET hospital_preferido=?, doctor_preferido=?, embarazada=?, plan_actual=?, edad=?, fecha_nacimiento=?
                         WHERE id_cliente=?
-                    """, (hospital_pref, obgyn_pref, pregnant, current_plan, actuarial_age, clean_dob or dob_val, id_c))
+                    """, (hospital_pref, obgyn_pref, pregnant, save_plan, actuarial_age, clean_dob or dob_val, id_c))
                     conn.commit()
                     conn.close()
 
@@ -1933,7 +1780,7 @@ if menu_option == "🔍 Search & Quote Candidate":
                                 hospital_pref=hospital_pref,
                                 obgyn_pref=obgyn_pref,
                                 pregnant=pregnant,
-                                current_plan=current_plan,
+                                current_plan=save_plan,
                                 hosp_in_net=hosp_in_net,
                                 doc_in_net=doc_in_net
                             )
@@ -1956,470 +1803,288 @@ if menu_option == "🔍 Search & Quote Candidate":
 
         # ── STAGE 3: ACA QUOTES & PROPOSAL GALLERY (IMAGE 3 VISUAL) ──
         elif curr_stage == 3:
-            # Quick Candidate Status Banner
-            st.markdown(
-                f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; padding:10px 18px; margin-bottom:14px; font-size:0.85rem; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-                    <div><b>Candidate:</b> {selected_candidate} &bull; <b>Location:</b> {state_db} ({zip_db}) &bull; <b>Agency:</b> {agency_db}</div>
-                    <div style="color:#1E40AF; font-weight:700;"><b>Actuarial Age:</b> {actuarial_age} yrs &bull; <b>Effective:</b> {eff_date.strftime('%Y/%m/%d')}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            # ── BOX 1: Clean Demographics Header (No APTC / No Active Rating Bar) ──
+            with st.container(border=True):
+                c_s1, c_s2, c_s3 = st.columns(3)
+                with c_s1:
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.75rem; color:#64748B; font-weight:600;">Rating Location</div>
+                        <div style="font-weight:700; color:#0F172A; font-size:0.95rem;">{state_db} ({zip_db})</div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                with c_s2:
+                    curr_hh = st.session_state.get(f"hh_size_{cand_key}", 1)
+                    curr_inc = st.session_state.get(f"hh_income_{cand_key}", 150000)
+                    hh_str = f"{curr_hh} Person" if curr_hh == 1 else f"{curr_hh} People"
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.75rem; color:#64748B; font-weight:600;">Household / Income</div>
+                        <div style="font-weight:700; color:#0F172A; font-size:0.95rem;">{hh_str} &bull; ${curr_inc:,.0f}/yr</div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                with c_s3:
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.75rem; color:#64748B; font-weight:600;">Effective Coverage Date</div>
+                        <div style="font-weight:700; color:#0F172A; font-size:0.95rem;">{eff_date.strftime('%Y-%m-%d')}</div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
             # ── 1. Universo Completo de Planes ──
             all_available_plans = []
 
-            if is_california:
-                zip_prefix = str(zip_db).strip()[:3]
-                if zip_prefix in ["910","911","912","913","914","915","916","917","918","935"]:
-                    r_bro, r_sil, r_gol, r_pla = 318.50, 401.73, 536.48, 730.81
-                elif zip_prefix in ["900","901","902","903","904","905","906","907","908"]:
-                    r_bro, r_sil, r_gol, r_pla = 349.80, 441.12, 588.90, 802.05
-                elif zip_prefix in ["922","923","924","925"]:
-                    r_bro, r_sil, r_gol, r_pla = 371.90, 469.00, 626.20, 852.92
-                elif zip_prefix in ["926","927","928"]:
-                    r_bro, r_sil, r_gol, r_pla = 356.25, 449.29, 599.84, 817.15
-                elif zip_prefix in ["919","920","921"]:
-                    r_bro, r_sil, r_gol, r_pla = 379.10, 478.10, 638.35, 869.78
-                elif zip_prefix in ["936","937","938"]:
-                    r_bro, r_sil, r_gol, r_pla = 368.15, 464.25, 619.75, 844.03
-                else:
-                    r_bro, r_sil, r_gol, r_pla = 362.40, 457.05, 609.40, 831.00
+            # ── 1. Universo Completo de Planes (HealthSherpa One API Exclusivo) ──
+            all_available_plans = []
 
-                age_int = int(actuarial_age)
-                net_type = obtener_tipo_red_anthem_ca(zip_db)
-                f_sil = calcular_factor_edad_ca(age_int, "silver")
-                f_gol = calcular_factor_edad_ca(age_int, "gold")
-                f_pla = calcular_factor_edad_ca(age_int, "platinum")
-                f_bro = calcular_factor_edad_ca(age_int, "bronze")
-                f_cat = calcular_factor_edad_ca(min(age_int, 29), "bronze") * 0.85
-
-                all_available_plans = [
-                    # 1. Kaiser Catastrophic ($292)
-                    {
-                        "id": "ca_kp_cat",
-                        "name": "Kaiser Permanente Catastrophic Young Adult Plan",
-                        "issuer": "Kaiser Permanente",
-                        "metal": "Catastrophic",
-                        "plan_type": "HMO",
-                        "prem_val": 292.00,
-                        "gross_prem_val": 292.00,
-                        "ded": "$9,450", "oop": "$9,450",
-                        "pcp": "3 free visits / ded.", "spec": "Ded. then coins.", "rx": "Ded. then 0%",
-                        "labs": "Ded. then 0%", "xrays": "Ded. then 0%", "office_visits": "3 free visits",
-                        "cb_phys": "Ded. then 0%", "cb_fac": "Ded. then 0%", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 2. Blue Shield Catastrophic ($310)
-                    {
-                        "id": "ca_bsc_cat",
-                        "name": "Blue Shield of California Catastrophic Young Adult Plan",
-                        "issuer": "Blue Shield of California",
-                        "metal": "Catastrophic",
-                        "plan_type": "HMO",
-                        "prem_val": 310.00,
-                        "gross_prem_val": 310.00,
-                        "ded": "$9,450", "oop": "$9,450",
-                        "pcp": "3 free visits / ded.", "spec": "Ded. then coins.", "rx": "Ded. then 0%",
-                        "labs": "Ded. then 0%", "xrays": "Ded. then 0%", "office_visits": "3 free visits",
-                        "cb_phys": "Ded. then 0%", "cb_fac": "Ded. then 0%", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 3. Molina Catastrophic ($346)
-                    {
-                        "id": "ca_mol_cat",
-                        "name": "Molina Healthcare Catastrophic Young Adult Plan",
-                        "issuer": "Molina Healthcare",
-                        "metal": "Catastrophic",
-                        "plan_type": "HMO",
-                        "prem_val": 346.00,
-                        "gross_prem_val": 346.00,
-                        "ded": "$9,450", "oop": "$9,450",
-                        "pcp": "3 free visits / ded.", "spec": "Ded. then coins.", "rx": "Ded. then 0%",
-                        "labs": "Ded. then 0%", "xrays": "Ded. then 0%", "office_visits": "3 free visits",
-                        "cb_phys": "Ded. then 0%", "cb_fac": "Ded. then 0%", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 4. Valley Health Plan Catastrophic ($364)
-                    {
-                        "id": "ca_vhp_cat",
-                        "name": "Valley Health Plan Catastrophic Young Adult Plan",
-                        "issuer": "Valley Health Plan",
-                        "metal": "Catastrophic",
-                        "plan_type": "HMO",
-                        "prem_val": 364.00,
-                        "gross_prem_val": 364.00,
-                        "ded": "$9,450", "oop": "$9,450",
-                        "pcp": "3 free visits / ded.", "spec": "Ded. then coins.", "rx": "Ded. then 0%",
-                        "labs": "Ded. then 0%", "xrays": "Ded. then 0%", "office_visits": "3 free visits",
-                        "cb_phys": "Ded. then 0%", "cb_fac": "Ded. then 0%", "lien": "Yes",
-                        "benefits_url": "https://www.valleyhealthplan.org"
-                    },
-                    # 5. Kaiser Bronze Care Saver HMO ($422)
-                    {
-                        "id": "ca_kp_bro_saver",
-                        "name": "Kaiser Permanente Bronze Care Saver HMO",
-                        "issuer": "Kaiser Permanente",
-                        "metal": "Bronze",
-                        "plan_type": "HMO",
-                        "prem_val": 422.00,
-                        "gross_prem_val": 422.00,
-                        "ded": "$7,500", "oop": "$9,200",
-                        "pcp": "3 free visits / ded.", "spec": "$95 copay", "rx": "Ded. then 0%",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "40% coinsurance", "cb_fac": "40% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 6. Blue Shield Bronze Care Saver HMO ($440)
-                    {
-                        "id": "ca_bsc_bro_saver",
-                        "name": "Blue Shield of California Bronze Care Saver HMO",
-                        "issuer": "Blue Shield of California",
-                        "metal": "Bronze",
-                        "plan_type": "HMO",
-                        "prem_val": 440.00,
-                        "gross_prem_val": 440.00,
-                        "ded": "$7,500", "oop": "$9,200",
-                        "pcp": "3 free visits / ded.", "spec": "$95 copay", "rx": "Ded. then 0%",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "40% coinsurance", "cb_fac": "40% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 7. Anthem Blue Cross Bronze 60 ($368)
-                    {
-                        "id": "ca_ant_bro",
-                        "name": f"Anthem Blue Cross Bronze 60 {net_type}",
-                        "issuer": "Anthem Blue Cross",
-                        "metal": "Bronze",
-                        "plan_type": net_type,
-                        "prem_val": round(r_bro * f_bro, 2),
-                        "gross_prem_val": round(r_bro * f_bro, 2),
-                        "ded": "$6,300", "oop": "$9,500",
-                        "pcp": "$65 copay", "spec": "$95 copay", "rx": "$18 copay",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "40% coinsurance", "cb_fac": "40% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 8. Kaiser Silver 70 HMO ($457)
-                    {
-                        "id": "ca_kp_sil",
-                        "name": "Kaiser Permanente Silver 70 HMO",
-                        "issuer": "Kaiser Permanente",
-                        "metal": "Silver",
-                        "plan_type": "HMO",
-                        "prem_val": round(r_sil * f_sil * 0.97, 2),
-                        "gross_prem_val": round(r_sil * f_sil * 0.97, 2),
-                        "ded": "$5,200", "oop": "$9,800",
-                        "pcp": "$50 copay", "spec": "$90 copay", "rx": "$15 copay",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 9. Anthem Blue Cross Silver 70 ($464)
-                    {
-                        "id": "ca_ant_sil",
-                        "name": f"Anthem Blue Cross Silver 70 {net_type}",
-                        "issuer": "Anthem Blue Cross",
-                        "metal": "Silver",
-                        "plan_type": net_type,
-                        "prem_val": round(r_sil * f_sil, 2),
-                        "gross_prem_val": round(r_sil * f_sil, 2),
-                        "ded": "$5,200", "oop": "$9,800",
-                        "pcp": "$50 copay", "spec": "$90 copay", "rx": "$15 copay",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 10. Blue Shield Silver 70 HMO ($466)
-                    {
-                        "id": "ca_bsc_sil",
-                        "name": "Blue Shield of California Silver 70 HMO",
-                        "issuer": "Blue Shield of California",
-                        "metal": "Silver",
-                        "plan_type": "HMO",
-                        "prem_val": round(r_sil * f_sil * 1.02, 2),
-                        "gross_prem_val": round(r_sil * f_sil * 1.02, 2),
-                        "ded": "$5,200", "oop": "$9,800",
-                        "pcp": "$50 copay", "spec": "$90 copay", "rx": "$15 copay",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 11. Molina Silver 70 HMO ($469)
-                    {
-                        "id": "ca_mol_sil",
-                        "name": "Molina Healthcare Silver 70 HMO",
-                        "issuer": "Molina Healthcare",
-                        "metal": "Silver",
-                        "plan_type": "HMO",
-                        "prem_val": round(r_sil * f_sil * 1.01, 2),
-                        "gross_prem_val": round(r_sil * f_sil * 1.01, 2),
-                        "ded": "$5,200", "oop": "$9,800",
-                        "pcp": "$50 copay", "spec": "$90 copay", "rx": "$15 copay",
-                        "labs": "$50 copay", "xrays": "40% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 12. Kaiser Gold 80 HMO ($599)
-                    {
-                        "id": "ca_kp_gol",
-                        "name": "Kaiser Permanente Gold 80 HMO",
-                        "issuer": "Kaiser Permanente",
-                        "metal": "Gold",
-                        "plan_type": "HMO",
-                        "prem_val": round(r_gol * f_gol * 0.97, 2),
-                        "gross_prem_val": round(r_gol * f_gol * 0.97, 2),
-                        "ded": "$0", "oop": "$9,200",
-                        "pcp": "$40 copay", "spec": "$70 copay", "rx": "$15 copay",
-                        "labs": "$40 copay", "xrays": "30% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 13. Blue Shield Gold 80 HMO ($615)
-                    {
-                        "id": "ca_bsc_gol",
-                        "name": "Blue Shield of California Gold 80 HMO",
-                        "issuer": "Blue Shield of California",
-                        "metal": "Gold",
-                        "plan_type": "HMO",
-                        "prem_val": round(r_gol * f_gol * 1.02, 2),
-                        "gross_prem_val": round(r_gol * f_gol * 1.02, 2),
-                        "ded": "$0", "oop": "$9,200",
-                        "pcp": "$40 copay", "spec": "$70 copay", "rx": "$15 copay",
-                        "labs": "$40 copay", "xrays": "30% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 14. Anthem Blue Cross Gold 80 ($620)
-                    {
-                        "id": "ca_ant_gol",
-                        "name": f"Anthem Blue Cross Gold 80 {net_type}",
-                        "issuer": "Anthem Blue Cross",
-                        "metal": "Gold",
-                        "plan_type": net_type,
-                        "prem_val": round(r_gol * f_gol, 2),
-                        "gross_prem_val": round(r_gol * f_gol, 2),
-                        "ded": "$0", "oop": "$9,200",
-                        "pcp": "$40 copay", "spec": "$70 copay", "rx": "$15 copay",
-                        "labs": "$40 copay", "xrays": "30% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                    # 15. Anthem Blue Cross Platinum 90 ($844)
-                    {
-                        "id": "ca_ant_pla",
-                        "name": f"Anthem Blue Cross Platinum 90 {net_type}",
-                        "issuer": "Anthem Blue Cross",
-                        "metal": "Platinum",
-                        "plan_type": net_type,
-                        "prem_val": round(r_pla * f_pla, 2),
-                        "gross_prem_val": round(r_pla * f_pla, 2),
-                        "ded": "$0", "oop": "$5,000",
-                        "pcp": "$15 copay", "spec": "$30 copay", "rx": "$5 copay",
-                        "labs": "$15 copay", "xrays": "10% coinsurance", "office_visits": "No charge",
-                        "cb_phys": "10% coinsurance", "cb_fac": "10% coinsurance", "lien": "Yes",
-                        "benefits_url": "https://www.coveredca.com"
-                    },
-                ]
-                engine_badge_label = "Covered California 2026 Actuarial Rates (Kaiser / Blue Shield / Anthem / Molina / Valley Health)"
-                badge_bg = "#EFF6FF"
-                badge_border = "#BFDBFE"
-                badge_text = "#1E40AF"
-
-            else:
-                # ── 2. Unified Live Quoting Engine (HealthSherpa / HealthCare.gov) ──
-                cand_prov_npis = []
-                if "hosp_npi" in locals() and hosp_npi:
-                    cand_prov_npis.append(hosp_npi)
-                if "obgyn_npi" in locals() and obgyn_npi:
-                    cand_prov_npis.append(obgyn_npi)
-
-                api_ok, api_plans, state_api, county_api, all_api_plans, active_engine = fetch_unified_plans(
-                    zipcode=zip_db,
-                    age=actuarial_age,
+            with st.spinner("Fetching live carrier quotes from HealthSherpa One API..."):
+                api_quotes_data = obtener_cotizaciones_healthsherpa(
+                    zip_code=zip_db,
+                    age=int(actuarial_age),
+                    income=0,
+                    household_size=1,
+                    effective_date=eff_date.strftime("%Y-%m-%d"),
+                    pregnant=(str(pregnant).strip().lower() == "yes"),
                     state_code=state_db,
-                    pregnant=(pregnant == "Yes"),
-                    carrier_pref=carrier_db,
-                    provider_npis=cand_prov_npis if cand_prov_npis else None
+                    carrier_pref=carrier_db
                 )
+                all_api_plans = api_quotes_data.get("plans", [])
 
-                if api_ok and all_api_plans:
-                    engine_badge_label = f"Live Rates via {active_engine} ({county_api or state_api})"
-                    badge_bg = "#EFF6FF" if "HealthSherpa" in active_engine else "#ECFDF5"
-                    badge_border = "#BFDBFE" if "HealthSherpa" in active_engine else "#A7F3D0"
-                    badge_text = "#1E40AF" if "HealthSherpa" in active_engine else "#065F46"
+            if all_api_plans:
+                for p in all_api_plans:
+                    g_val = float(p.get("prem_val", 0.0) or p.get("gross_prem_val", 0.0))
+                    n_val = float(p.get("net_prem_val", g_val))
+                    all_available_plans.append({
+                        "id": str(p.get("id")),
+                        "name": p.get("name"),
+                        "issuer": p.get("issuer"),
+                        "metal": p.get("metal") or "Bronze",
+                        "plan_type": p.get("plan_type") or "HMO",
+                        "prem_val": n_val,
+                        "gross_prem_val": g_val,
+                        "ded": str(p.get("ded", "$0")),
+                        "oop": str(p.get("oop", "$9,200")),
+                        "pcp": str(p.get("pcp", "$50 copay")),
+                        "spec": str(p.get("spec", "$90 copay")),
+                        "rx": str(p.get("rx", "$15 copay")),
+                        "emergency_room": str(p.get("emergency_room", "$350 copay")),
+                        "urgent_care": str(p.get("urgent_care", "$60 copay")),
+                        "ambulance": str(p.get("ambulance", "$250 copay")),
+                        "labs": str(p.get("labs", "Covered in Tier")),
+                        "xrays": str(p.get("xrays", "Standard Diagnostic")),
+                        "office_visits": str(p.get("office_visits", "Covered")),
+                        "cb_phys": str(p.get("cb_phys", "Standard In-Network")),
+                        "cb_fac": str(p.get("cb_fac", "Standard In-Network")),
+                        "lien": str(p.get("lien", "No")),
+                        "benefits_url": p.get("benefits_url", ""),
+                        "brochure_url": p.get("brochure_url", ""),
+                        "formulary_url": p.get("formulary_url", ""),
+                        "network_url": p.get("network_url", ""),
+                        "providers": p.get("providers", {}),
+                        "deeplink_enrollment": p.get("deeplink_enrollment", False)
+                    })
+            else:
+                st.warning(f"⚠️ HealthSherpa One API did not return active plans for ZIP **{zip_db}** ({state_db}). Please verify candidate location details.")
 
-                    for p in all_api_plans:
-                        g_val = float(p.get("prem_val", 0.0))
-                        n_val = float(p.get("net_prem_val", g_val))
-                        all_available_plans.append({
-                            "id": str(p.get("id")),
-                            "name": p.get("name"),
-                            "issuer": p.get("issuer"),
-                            "metal": p.get("metal") or "Bronze",
-                            "plan_type": p.get("plan_type") or "HMO",
-                            "prem_val": n_val,
-                            "gross_prem_val": g_val,
-                            "ded": str(p.get("ded", "$0")),
-                            "oop": str(p.get("oop", "$9,200")),
-                            "pcp": str(p.get("pcp", "$50 copay")),
-                            "spec": str(p.get("spec", "$90 copay")),
-                            "rx": "$15 copay",
-                            "labs": str(p.get("labs", "$50 copay")),
-                            "xrays": str(p.get("xrays", "40% coinsurance")),
-                            "office_visits": str(p.get("office_visits", "No charge")),
-                            "cb_phys": str(p.get("cb_phys", "30% coinsurance")),
-                            "cb_fac": str(p.get("cb_fac", "30% coinsurance")),
-                            "lien": str(p.get("lien", "Yes")),
-                            "benefits_url": p.get("benefits_url", ""),
-                            "brochure_url": p.get("brochure_url", ""),
-                            "formulary_url": p.get("formulary_url", ""),
-                            "network_url": p.get("network_url", "")
-                        })
-                else:
-                    age_int = int(actuarial_age)
-                    age_ratio = max(0.65, 1.0 + (age_int - 27) * 0.024)
-                    c_name = carrier_db if carrier_db and carrier_db != "No Preference" else "Marketplace Standard"
-                    all_available_plans = [
-                        {"id": "std_sil", "name": f"{c_name} Silver Plan", "issuer": c_name, "metal": "Silver", "plan_type": "HMO", "prem_val": round(340.00*age_ratio, 2), "gross_prem_val": round(340.00*age_ratio, 2), "ded": "$5,400", "oop": "$9,200", "pcp": "$45 copay", "spec": "$85 copay", "rx": "$15 copay", "labs": "$45 copay", "xrays": "30% coinsurance", "office_visits": "No charge", "cb_phys": "30% coinsurance", "cb_fac": "30% coinsurance", "lien": "Yes"},
-                        {"id": "std_gol", "name": f"{c_name} Gold Plan", "issuer": c_name, "metal": "Gold", "plan_type": "HMO", "prem_val": round(435.00*age_ratio, 2), "gross_prem_val": round(435.00*age_ratio, 2), "ded": "$1,500", "oop": "$8,700", "pcp": "$25 copay", "spec": "$50 copay", "rx": "$10 copay", "labs": "$25 copay", "xrays": "20% coinsurance", "office_visits": "No charge", "cb_phys": "20% coinsurance", "cb_fac": "20% coinsurance", "lien": "Yes"},
-                        {"id": "std_bro", "name": f"{c_name} Bronze HDHP", "issuer": c_name, "metal": "Bronze", "plan_type": "HMO", "prem_val": round(270.00*age_ratio, 2), "gross_prem_val": round(270.00*age_ratio, 2), "ded": "$7,500", "oop": "$7,500", "pcp": "$0 after ded", "spec": "$0 after ded", "rx": "Ded. then 0%", "labs": "$0 after ded", "xrays": "0% after ded", "office_visits": "$0 after ded", "cb_phys": "0% after ded", "cb_fac": "0% after ded", "lien": "Yes"},
-                        {"id": "std_pla", "name": f"{c_name} Platinum Plan", "issuer": c_name, "metal": "Platinum", "plan_type": "PPO", "prem_val": round(580.00*age_ratio, 2), "gross_prem_val": round(580.00*age_ratio, 2), "ded": "$0", "oop": "$4,500", "pcp": "$15 copay", "spec": "$30 copay", "rx": "$5 copay", "labs": "$15 copay", "xrays": "10% coinsurance", "office_visits": "No charge", "cb_phys": "10% coinsurance", "cb_fac": "10% coinsurance", "lien": "Yes"},
-                    ]
-                    engine_badge_label = f"Standard Actuarial Estimates ({state_db})"
-                    badge_bg = "#F8FAFC"
-                    badge_border = "#E2E8F0"
-                    badge_text = "#64748B"
-
-            # ── 2. Estado de Selección de la Propuesta ──
+            # ── 2. Estado de Selección de la Propuesta (INICIA COMPLETAMENTE DESELECCIONADO) ──
             sel_plan_ids_key = f"sel_plan_ids_{cand_key}"
-            if sel_plan_ids_key not in st.session_state or not st.session_state[sel_plan_ids_key]:
-                initial_pick = []
-                for tier_target in ["Silver", "Gold", "Bronze"]:
-                    matched = [p["id"] for p in all_available_plans if tier_target.lower() in p.get("metal", "").lower()]
-                    if matched and matched[0] not in initial_pick:
-                        initial_pick.append(matched[0])
-                if not initial_pick:
-                    initial_pick = [p["id"] for p in all_available_plans[:3]]
-                st.session_state[sel_plan_ids_key] = initial_pick
+            if sel_plan_ids_key not in st.session_state:
+                st.session_state[sel_plan_ids_key] = []
 
             selected_plan_ids = st.session_state[sel_plan_ids_key]
 
-            # ── 3. Toolbar y Filtros (Exacto a Imagen 3) ──
+            # ── CSS ESTRICTO: PALETA CORPORATIVA #1C237A & PÍLDORAS COMPACTAS ──
             st.markdown(
                 """
                 <style>
-                /* Metal Tiers pill selection styling matching Image 3 */
-                div[data-testid="stRadio"] > div {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                }
+                /* Badges */
                 .badge-tier-catastrophic { background:#FEE2E2; color:#DC2626; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; letter-spacing:0.4px; text-transform:uppercase; }
                 .badge-tier-bronze       { background:#FEF3C7; color:#92400E; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; letter-spacing:0.4px; text-transform:uppercase; }
                 .badge-tier-silver       { background:#F1F5F9; color:#475569; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; letter-spacing:0.4px; text-transform:uppercase; }
                 .badge-tier-gold         { background:#FEF9C3; color:#854D0E; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; letter-spacing:0.4px; text-transform:uppercase; }
                 .badge-tier-platinum     { background:#EDE9FE; color:#6D28D9; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; letter-spacing:0.4px; text-transform:uppercase; }
                 .badge-network           { background:#F1F5F9; color:#475569; font-weight:700; font-size:0.68rem; padding:3px 10px; border-radius:999px; text-transform:uppercase; }
+
+                /* BOTONES PRIMARIOS: EXACTO AZUL MARINO CORPORATIVO #1C237A */
+                button[kind="primary"],
+                div[data-testid="stBaseButton-primary"] button {
+                    background-color: #1C237A !important;
+                    background: #1C237A !important;
+                    background-image: none !important;
+                    color: #FFFFFF !important;
+                    border: 1px solid #1C237A !important;
+                    border-radius: 9px !important;
+                    font-weight: 700 !important;
+                    box-shadow: 0 2px 6px rgba(28, 35, 122, 0.22) !important;
+                    transition: all 0.2s ease !important;
+                }
+                button[kind="primary"]:hover,
+                div[data-testid="stBaseButton-primary"] button:hover {
+                    background-color: #121752 !important;
+                    background: #121752 !important;
+                    border-color: #121752 !important;
+                    color: #FFFFFF !important;
+                }
+
+                /* Compact Metal Tier Pill Buttons matching Image 2 */
+                div[data-testid="stHorizontalBlock"]:has(.metal-pill-box) button {
+                    padding: 3px 10px !important;
+                    min-height: 30px !important;
+                    height: 30px !important;
+                    font-size: 0.78rem !important;
+                    font-weight: 600 !important;
+                    border-radius: 999px !important;
+                    border: none !important;
+                    background: #F1F5F9 !important;
+                    color: #475569 !important;
+                    margin: 0 !important;
+                    box-shadow: none !important;
+                    transition: all 0.15s ease !important;
+                }
+                div[data-testid="stHorizontalBlock"]:has(.metal-pill-box) button:hover {
+                    background: #E2E8F0 !important;
+                    color: #0F172A !important;
+                }
+                div[data-testid="stHorizontalBlock"]:has(.metal-pill-box) button[kind="primary"] {
+                    background: #0F172A !important;
+                    color: #FFFFFF !important;
+                    border: none !important;
+                }
                 </style>
                 """,
                 unsafe_allow_html=True
             )
 
-            # Row 1: Metal Tiers (left) and Sort (right)
-            col_t1, col_t2 = st.columns([3, 1.2])
-            with col_t1:
+            # ── BOX 2: Filter Panel Box (Matching Image 2 Box 2 Exactly) ──
+            tier_filter_key = f"tier_filter_{cand_key}"
+            if tier_filter_key not in st.session_state:
+                st.session_state[tier_filter_key] = []
+            active_tiers = st.session_state[tier_filter_key]
+
+            with st.container(border=True):
                 st.markdown(
                     """
-                    <div style="font-size:0.75rem; font-weight:700; color:#334155; text-transform:uppercase; margin-bottom:4px; letter-spacing:0.3px;">
+                    <div style="font-size:0.75rem; font-weight:700; color:#334155; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.3px;">
                         METAL TIERS: <span style="font-weight:400; color:#64748B; text-transform:none;">(Click to multi-select, e.g. Bronze + Silver)</span>
                     </div>
+                    <div class="metal-pill-box" style="display:none;"></div>
                     """,
                     unsafe_allow_html=True
                 )
-                tier_pills = ["All Metal Tiers", "Bronze", "Silver", "Gold", "Platinum", "Catastrophic"]
-                selected_tier = st.radio(
-                    "Metal Tiers",
-                    tier_pills,
-                    horizontal=True,
-                    label_visibility="collapsed",
-                    key=f"tier_radio_{cand_key}"
-                )
-            with col_t2:
-                sort_by = st.selectbox(
-                    "⇅ Sort by:",
-                    ["Lowest Net Premium (Client Cost)", "Lowest Deductible", "Lowest OOP Max", "Plan Name"],
-                    key=f"f_sort_{cand_key}"
-                )
 
-            # Row 2: Carrier, Network, Search, Count
-            f_c1, f_c2, f_c3 = st.columns([1.3, 1.2, 2.0])
-            issuers_list = sorted(list(set(p["issuer"] for p in all_available_plans if p.get("issuer"))))
-            with f_c1:
-                filt_carrier = st.selectbox("Carrier:", ["All Carriers"] + issuers_list, key=f"f_carrier_{cand_key}")
-            with f_c2:
-                filt_network = st.selectbox("Network:", ["All Network Types", "HMO", "EPO", "PPO"], key=f"f_network_{cand_key}")
-            with f_c3:
-                search_query = st.text_input("Search plan name or carrier...", placeholder="Search plan name or carrier...", key=f"f_search_{cand_key}")
+                # Row 1: Compact Metal Tiers (Left) and Sort Dropdown (Right)
+                col_tiers, col_sort = st.columns([3.8, 1.2])
+                with col_tiers:
+                    t_cols = st.columns(6)
+                    with t_cols[0]:
+                        all_active = (len(active_tiers) == 0)
+                        if st.button("All Metal Tiers", key=f"btn_tier_all_{cand_key}", type="primary" if all_active else "secondary", use_container_width=True):
+                            st.session_state[tier_filter_key] = []
+                            st.rerun()
+                    tier_names = ["Bronze", "Silver", "Gold", "Platinum", "Catastrophic"]
+                    for i_t, t_name in enumerate(tier_names):
+                        with t_cols[i_t + 1]:
+                            is_t_active = t_name in active_tiers
+                            t_label = f"✓ {t_name}" if is_t_active else t_name
+                            if st.button(t_label, key=f"btn_t_{t_name}_{cand_key}", type="primary" if is_t_active else "secondary", use_container_width=True):
+                                if is_t_active:
+                                    active_tiers.remove(t_name)
+                                else:
+                                    active_tiers.append(t_name)
+                                st.session_state[tier_filter_key] = active_tiers
+                                st.rerun()
 
-            # ── 4. Filtrar y Ordenar ──
-            filtered_plans = list(all_available_plans)
+                with col_sort:
+                    sort_by = st.selectbox(
+                        "⇅ Sort by:",
+                        ["Lowest Monthly Premium", "Lowest Deductible", "Lowest OOP Max", "Plan Name"],
+                        key=f"f_sort_{cand_key}"
+                    )
 
-            if selected_tier != "All Metal Tiers":
-                filtered_plans = [p for p in filtered_plans if selected_tier.lower() in p.get("metal", "").lower()]
+                # Row 2: Carrier, Network, Search (Matching Image 2)
+                f_c1, f_c2, f_c3 = st.columns([1.3, 1.2, 2.5])
+                issuers_list = sorted(list(set(p["issuer"] for p in all_available_plans if p.get("issuer"))))
+                with f_c1:
+                    filt_carrier = st.selectbox("Carrier:", ["All Carriers"] + issuers_list, key=f"f_carrier_{cand_key}")
+                with f_c2:
+                    filt_network = st.selectbox("Network:", ["All Network Types", "HMO", "EPO", "PPO"], key=f"f_network_{cand_key}")
+                with f_c3:
+                    search_query = st.text_input("Search plan name or carrier...", placeholder="Search plan name or carrier...", key=f"f_search_{cand_key}")
 
-            if filt_carrier != "All Carriers":
-                filtered_plans = [p for p in filtered_plans if p.get("issuer") == filt_carrier]
+                # ── Filtrar y Ordenar ──
+                filtered_plans = list(all_available_plans)
 
-            if filt_network != "All Network Types":
-                filtered_plans = [p for p in filtered_plans if p.get("plan_type") == filt_network]
+                if active_tiers:
+                    filtered_plans = [
+                        p for p in filtered_plans 
+                        if any(t.lower() in p.get("metal", "").lower() for t in active_tiers)
+                    ]
 
-            if search_query and search_query.strip():
-                sq = search_query.strip().lower()
-                filtered_plans = [p for p in filtered_plans if sq in p.get("name", "").lower() or sq in p.get("issuer", "").lower()]
+                selected_carrier = st.session_state.get(f"f_carrier_{cand_key}", filt_carrier)
+                if selected_carrier and selected_carrier != "All Carriers":
+                    sc_clean = str(selected_carrier).strip().lower()
+                    filtered_plans = [
+                        p for p in filtered_plans 
+                        if sc_clean == str(p.get("issuer", "")).strip().lower()
+                    ]
 
-            if "Lowest Net Premium" in sort_by:
-                filtered_plans.sort(key=lambda x: x.get("prem_val", 0))
-            elif sort_by == "Lowest Deductible":
-                filtered_plans.sort(key=lambda x: float(re.sub(r'[^\d.]', '', str(x.get("ded", 0))) or 0))
-            elif sort_by == "Lowest OOP Max":
-                filtered_plans.sort(key=lambda x: float(re.sub(r'[^\d.]', '', str(x.get("oop", 0))) or 0))
-            elif sort_by == "Plan Name":
-                filtered_plans.sort(key=lambda x: x.get("name", ""))
+                selected_network = st.session_state.get(f"f_network_{cand_key}", filt_network)
+                if selected_network and selected_network != "All Network Types":
+                    sn_clean = str(selected_network).strip().upper()
+                    filtered_plans = [
+                        p for p in filtered_plans 
+                        if sn_clean == str(p.get("plan_type", "")).strip().upper()
+                    ]
 
-            # Row 3: Proposal Selection Summary Bar
-            plan_dict = {p["id"]: p for p in all_available_plans}
-            c_prop1, c_prop2 = st.columns([2, 1.5])
-            with c_prop1:
-                st.markdown(
-                    f"""
-                    <div style="font-size:0.84rem; padding-top:6px;">
-                        <span style="color:#64748B;">Showing <b>{len(filtered_plans)}</b> of {len(all_available_plans)} quotes</span> &bull;
-                        <span style="color:#1C237A; font-weight:700;">Proposal Selection: <b>{len(selected_plan_ids)}</b> of 5 selected for PDF</span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            with c_prop2:
-                c_btn_a, c_btn_b = st.columns(2)
-                with c_btn_a:
-                    if st.button("Recommended (3)", key=f"btn_rec_{cand_key}", help="Select 1 Silver, 1 Gold, 1 Bronze"):
-                        rec_ids = []
-                        for tier_t in ["Silver", "Gold", "Bronze"]:
-                            m = [p["id"] for p in all_available_plans if tier_t.lower() in p.get("metal", "").lower()]
-                            if m and m[0] not in rec_ids:
-                                rec_ids.append(m[0])
-                        st.session_state[sel_plan_ids_key] = rec_ids
-                        st.rerun()
-                with c_btn_b:
-                    if st.button("Clear Selection", key=f"btn_clear_{cand_key}"):
-                        st.session_state[sel_plan_ids_key] = []
-                        st.rerun()
+                if search_query and search_query.strip():
+                    sq = search_query.strip().lower()
+                    filtered_plans = [p for p in filtered_plans if sq in p.get("name", "").lower() or sq in p.get("issuer", "").lower()]
 
-            st.markdown("<br>", unsafe_allow_html=True)
+                if "Lowest Monthly Premium" in sort_by or "Lowest Net Premium" in sort_by:
+                    filtered_plans.sort(key=lambda x: x.get("prem_val", 0))
+                elif sort_by == "Lowest Deductible":
+                    filtered_plans.sort(key=lambda x: float(re.sub(r'[^0-9.]', '', str(x.get("ded", 0))) or 0))
+                elif sort_by == "Lowest OOP Max":
+                    filtered_plans.sort(key=lambda x: float(re.sub(r'[^0-9.]', '', str(x.get("oop", 0))) or 0))
+                elif sort_by == "Plan Name":
+                    filtered_plans.sort(key=lambda x: x.get("name", ""))
 
-            # ── 5. Galería de Tarjetas en 3 Columnas (Matching Image 3 Exactly) ──
+                # Row 3: Proposal Selection Summary matching Image 2
+                plan_dict = {p["id"]: p for p in all_available_plans}
+                selected_plan_ids = [pid for pid in selected_plan_ids if pid in plan_dict]
+                st.session_state[sel_plan_ids_key] = selected_plan_ids
+                c_prop_l, c_prop_r = st.columns([3.5, 1.5])
+                with c_prop_l:
+                    c_sel_btn1, c_sel_btn2 = st.columns([1.4, 1.2])
+                    with c_sel_btn1:
+                        if st.button(f"Select All Filtered ({min(5, len(filtered_plans))})", key=f"btn_sel_all_{cand_key}"):
+                            for p in filtered_plans[:5]:
+                                if p["id"] not in selected_plan_ids:
+                                    selected_plan_ids.append(p["id"])
+                            st.session_state[sel_plan_ids_key] = selected_plan_ids
+                            st.rerun()
+                    with c_sel_btn2:
+                        if len(selected_plan_ids) > 0:
+                            if st.button(f"Clear Selection ({len(selected_plan_ids)})", key=f"btn_clear_sel_{cand_key}"):
+                                st.session_state[sel_plan_ids_key] = []
+                                st.rerun()
+
+                with c_prop_r:
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.84rem; text-align:right; padding-top:8px;">
+                            <span style="color:#64748B;">Showing <b>{len(filtered_plans)}</b> of {len(all_available_plans)} quotes</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
+
+            # ── BOX 3: Galería de Tarjetas en 3 Columnas (Con Borde Unificado Exacto) ──
             if not filtered_plans:
                 st.info("No plans match the selected filters. Try changing your Metal Tier or Carrier filter.")
 
@@ -2442,64 +2107,48 @@ if menu_option == "🔍 Search & Quote Candidate":
                         else:
                             tier_badge_class = "badge-tier-bronze"
 
-                        sel_border = "border: 2px solid #2563EB; background: #F8FAFC;" if is_selected else "border: 1px solid #E2E8F0; background: #FFFFFF;"
-                        gross_str = f"${plan.get('gross_prem_val', plan.get('prem_val', 0)):,.0f} gross"
+                        # Card selection border: Blue 2px when selected
+                        sel_border = "border: 2px solid #2563EB; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);" if is_selected else "border: 1px solid #E2E8F0; box-shadow: 0 2px 6px rgba(0,0,0,0.03);"
 
-                        # Checkbox row at the top of the card
-                        c_chk1, c_chk2 = st.columns([1.6, 1.4])
-                        with c_chk1:
-                            st.markdown(
-                                f'<div style="display:flex; gap:6px; align-items:center; padding-top:4px;">'
-                                f'<span class="{tier_badge_class}">{plan.get("metal", "Bronze")}</span>'
-                                f'<span class="badge-network">{plan.get("plan_type", "HMO")}</span>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
-                        with c_chk2:
-                            chk_key = f"chk_pdf_{cand_key}_{pid}"
-                            new_chk = st.checkbox("Select for PDF", value=is_selected, key=chk_key)
-                            if new_chk != is_selected:
-                                if new_chk:
-                                    if len(selected_plan_ids) < 5:
-                                        selected_plan_ids.append(pid)
-                                    else:
-                                        st.warning("Maximum of 5 plans can be included in the official quote.")
-                                else:
-                                    if pid in selected_plan_ids:
-                                        selected_plan_ids.remove(pid)
-                                st.rerun()
+                        # Badges & Selection Indicator INSIDE the unified card container
+                        sel_indicator = '<span style="background:#EFF6FF; color:#1D4ED8; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:12px; border:1px solid #BFDBFE;">✓ Selected</span>' if is_selected else ''
 
-                        card_html = f"""
-                        <div style="{sel_border} border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(15,23,42,0.04); margin-bottom:8px;">
-                            <div style="font-size:0.75rem; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:2px;">{plan.get('issuer', 'Carrier')}</div>
-                            <div style="font-size:0.95rem; font-weight:800; color:#0F172A; line-height:1.3; min-height:44px; margin-bottom:12px;">{plan.get('name', 'Health Plan')}</div>
-                            <div style="font-size:0.72rem; color:#64748B; font-weight:600; margin-bottom:2px;">Net Monthly Premium</div>
-                            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; border-bottom:1px solid #F1F5F9; padding-bottom:8px;">
-                                <div style="color:#059669; font-size:1.85rem; font-weight:800; line-height:1; letter-spacing:-0.5px;">${plan.get('prem_val', 0):,.0f} <span style="font-size:0.8rem; font-weight:600; color:#64748B;">/month</span></div>
-                                <div style="color:#94A3B8; font-size:0.78rem; text-decoration:line-through; font-weight:500;">{gross_str}</div>
-                            </div>
-                            <div style="font-size:0.79rem;">
-                                <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
-                                    <span style="color:#64748B;">Individual Medical Deductible</span>
-                                    <span style="font-weight:700; color:#0F172A;">{plan.get('ded', '$0')}</span>
-                                </div>
-                                <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
-                                    <span style="color:#64748B;">Out-of-Pocket Maximum</span>
-                                    <span style="font-weight:700; color:#0F172A;">{plan.get('oop', '$9,200')}</span>
-                                </div>
-                                <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
-                                    <span style="color:#64748B;">Primary Doctor Visit</span>
-                                    <span style="font-weight:700; color:#0F172A;">{plan.get('pcp', '$50 copay')}</span>
-                                </div>
-                                <div style="display:flex; justify-content:space-between; padding:5px 0;">
-                                    <span style="color:#64748B;">Generic Rx Copay</span>
-                                    <span style="font-weight:700; color:#0F172A;">{plan.get('rx', '$15 copay')}</span>
-                                </div>
-                            </div>
-                        </div>
-                        """
+                        card_html = f"""<div style="{sel_border} border-radius:14px; padding:16px; background:#FFFFFF; margin-bottom:8px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <div style="display:flex; gap:6px; align-items:center;">
+        <span class="{tier_badge_class}">{plan.get("metal", "Bronze")}</span>
+        <span class="badge-network">{plan.get("plan_type", "HMO")}</span>
+    </div>
+    <div>{sel_indicator}</div>
+</div>
+<div style="font-size:0.75rem; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:2px;">{plan.get('issuer', 'Carrier')}</div>
+<div style="font-size:0.95rem; font-weight:800; color:#0F172A; line-height:1.3; min-height:44px; margin-bottom:12px;">{plan.get('name', 'Health Plan')}</div>
+<div style="font-size:0.74rem; color:#64748B; font-weight:600; margin-bottom:4px;">Monthly Premium</div>
+<div style="display:flex; justify-content:flex-start; align-items:baseline; margin-bottom:12px; border-bottom:1px solid #F1F5F9; padding-bottom:8px;">
+<div style="color:#059669; font-size:1.85rem; font-weight:800; line-height:1; letter-spacing:-0.5px;">${plan.get('prem_val', 0):,.2f} <span style="font-size:0.82rem; font-weight:600; color:#64748B;">/month</span></div>
+</div>
+<div style="font-size:0.79rem;">
+<div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
+<span style="color:#64748B;">Individual Medical Deductible</span>
+<span style="font-weight:700; color:#0F172A;">{plan.get('ded', '$0')}</span>
+</div>
+<div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
+<span style="color:#64748B;">Out-of-Pocket Maximum</span>
+<span style="font-weight:700; color:#0F172A;">{plan.get('oop', '$9,200')}</span>
+</div>
+<div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dashed #F1F5F9;">
+<span style="color:#64748B;">Primary Doctor Visit</span>
+<span style="font-weight:700; color:#0F172A;">{plan.get('pcp', '$50 copay')}</span>
+</div>
+<div style="display:flex; justify-content:space-between; padding:5px 0;">
+<span style="color:#64748B;">Generic Rx Copay</span>
+<span style="font-weight:700; color:#0F172A;">{plan.get('rx', '$15 copay')}</span>
+</div>
+</div>
+</div>"""
                         st.markdown(card_html, unsafe_allow_html=True)
 
+                        # Single Action Button Row (View Details on left, + Add / Added on right)
                         btn_c1, btn_c2 = st.columns([1, 1])
                         with btn_c1:
                             with st.popover("👁 View Details", use_container_width=True):
@@ -2507,12 +2156,18 @@ if menu_option == "🔍 Search & Quote Candidate":
                                 st.write(f"• **Carrier:** {plan.get('issuer')}")
                                 st.write(f"• **Tier & Network:** {plan.get('metal')} ({plan.get('plan_type')})")
                                 st.write(f"• **Specialist Copay:** {plan.get('spec', '$90 copay')}")
+                                st.write(f"• **Emergency Services:** {plan.get('emergency_room', '$350 copay')}")
+                                st.write(f"• **Urgent Care:** {plan.get('urgent_care', '$60 copay')}")
+                                st.write(f"• **Ambulance:** {plan.get('ambulance', '$250 copay')}")
                                 st.write(f"• **Childbirth Physician:** {plan.get('cb_phys', '30% coinsurance')}")
                                 st.write(f"• **Delivery Facility:** {plan.get('cb_fac', '30% coinsurance')}")
                                 st.write(f"• **Surrogacy Lien:** {plan.get('lien', 'Yes')}")
                                 b_url = plan.get("benefits_url")
                                 if b_url:
-                                    st.markdown(f"[Official Summary of Benefits (SBC)]({b_url})")
+                                    if ".pdf" in b_url.lower() or "cloudfront" in b_url.lower():
+                                        st.markdown(f"[📄 Official Summary of Benefits (SBC PDF)]({b_url})")
+                                    else:
+                                        st.markdown(f"[🌐 Official Summary of Benefits (Carrier Portal)]({b_url})")
                         with btn_c2:
                             btn_lbl = "✓ Added" if is_selected else "+ Add"
                             btn_type = "secondary" if is_selected else "primary"
@@ -2524,122 +2179,120 @@ if menu_option == "🔍 Search & Quote Candidate":
                                         selected_plan_ids.append(pid)
                                     else:
                                         st.warning("Maximum of 5 plans can be included in the official quote.")
+                                st.session_state[sel_plan_ids_key] = selected_plan_ids
                                 st.rerun()
 
-            # ── 6. Generación y Previsualización de la Propuesta Oficial ──
-            final_plans = []
-            for pid in selected_plan_ids:
-                if pid in plan_dict:
-                    p = plan_dict[pid]
-                    final_plans.append({
-                        "tier": p.get("name"),
-                        "premium": float(p.get("prem_val", 0.0)),
-                        "deductible": str(p.get("ded", "$0")),
-                        "oop_max": str(p.get("oop", "$9,200")),
-                        "pcp": str(p.get("pcp", "$50 copay")),
-                        "specialist": str(p.get("spec", "$90 copay")),
-                        "labs": str(p.get("labs", "$50 copay")),
-                        "xrays": str(p.get("xrays", "40% coinsurance")),
-                        "office_visits": str(p.get("office_visits", "No charge")),
-                        "cb_phys": str(p.get("cb_phys", "30% coinsurance")),
-                        "cb_fac": str(p.get("cb_fac", "30% coinsurance")),
-                        "lien": str(p.get("lien", "Yes")),
-                        "benefits_url": p.get("benefits_url", ""),
-                        "brochure_url": p.get("brochure_url", ""),
-                        "formulary_url": p.get("formulary_url", ""),
-                        "network_url": p.get("network_url", "")
-                    })
+                        st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
-            st.markdown("---")
+            # ── Proposal Actions: Review, Lien Customization, Download PDF & Upload to Monday.com ──
+            f_plans = [plan_dict[pid] for pid in selected_plan_ids if pid in plan_dict]
+            if len(f_plans) > 0:
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown("#### 📋 Official Proposal Review & Lien Selection")
+                    st.caption("Review your selected plans and set the Surrogacy Lien status (Yes / No) for each plan before generating the official PDF proposal.")
 
-            # ── Live On-Screen Official Quote Matrix Preview (Nexxel Corporate Purple #2A0845) ──
-            if final_plans:
-                st.markdown("### Official Quote Matrix Preview")
-                st.caption("Review the side-by-side proposal before downloading the PDF or syncing with monday.com.")
+                    pdf_plans_data = []
+                    for idx_p, p in enumerate(f_plans):
+                        p_id = p.get("id")
+                        iss_name = str(p.get("issuer", "")).lower()
+                        default_lien = "No" if (state_db == "CA" or "kaiser" in iss_name or "anthem" in iss_name or "blue shield" in iss_name or p.get("lien") == "No") else "Yes"
 
-                preview_html = """
-                <div style="overflow-x:auto; margin-bottom:1.5rem; border-radius:10px; border:1px solid #B8A9C9; box-shadow:0 4px 16px rgba(42,8,69,0.06);">
-                    <table style="width:100%; border-collapse:collapse; font-family:'Segoe UI',system-ui,sans-serif; font-size:0.84rem;">
-                        <thead>
-                            <tr style="background:#2A0845; color:#FFFFFF;">
-                                <th style="padding:10px 14px; text-align:left; border:1px solid #B8A9C9; width:26%; font-weight:700;">Benefit / Plan Option</th>
-                """
-                for p in final_plans:
-                    preview_html += f'<th style="padding:10px 14px; text-align:center; border:1px solid #B8A9C9; font-weight:700;">{p["tier"]}</th>'
-                preview_html += "</tr></thead><tbody>"
+                        col_lp1, col_lp2, col_lp3 = st.columns([3, 1.5, 1.5])
+                        with col_lp1:
+                            st.markdown(f"**{p.get('name')}**")
+                            st.caption(f"{p.get('issuer')} &bull; {p.get('metal')} ({p.get('plan_type')})", unsafe_allow_html=True)
+                        with col_lp2:
+                            st.markdown(f"**${p.get('prem_val', 0.0):,.2f}** <span style='font-size:0.8rem; color:#64748B;'>/mo</span>", unsafe_allow_html=True)
+                            st.caption(f"Ded: {p.get('ded')} &bull; OOP: {p.get('oop')}", unsafe_allow_html=True)
+                        with col_lp3:
+                            lien_key = f"sel_lien_{cand_key}_{p_id}"
+                            chosen_lien = st.selectbox(
+                                "Surrogacy Lien?",
+                                options=["No", "Yes"],
+                                index=0 if default_lien == "No" else 1,
+                                key=lien_key,
+                                help="Set 'Yes' or 'No' according to Andrea's review. Covered CA / California plans typically standard is 'No'."
+                            )
 
-                quote_rows = [
-                    ("Monthly Premium **", [f"<b>${p['premium']:.2f}</b>" for p in final_plans], "#2A0845", False),
-                    ("Deductible", [p['deductible'] for p in final_plans], "#2A0845", False),
-                    ("Max Out of pocket", [p['oop_max'] for p in final_plans], "#2A0845", False),
-                    ("Primary Care Physician", [p.get('pcp', '$50 copay') for p in final_plans], None, False),
-                    ("Specialist", [p.get('specialist', '$90 copay') for p in final_plans], None, False),
-                    ("Labs", [p.get('labs', '$50 copay') for p in final_plans], None, False),
-                    ("X-Rays", [p.get('xrays', '40% coinsurance') for p in final_plans], None, False),
-                    ("Office Visits", [p.get('office_visits', 'No charge') for p in final_plans], None, False),
-                    ("Childbirth / Physician Services", [p.get('cb_phys', '30% coinsurance') for p in final_plans], None, False),
-                    ("Childbirth / Delivery Facility", [p.get('cb_fac', '30% coinsurance') for p in final_plans], None, False),
-                    ("Lien for surrogacy?", [p.get('lien', 'Yes') for p in final_plans], "#FFFFFF", True),
-                ]
+                        pdf_plans_data.append({
+                            "id": p_id,
+                            "tier": p.get("name"),
+                            "issuer": p.get("issuer"),
+                            "metal": p.get("metal"),
+                            "premium": float(p.get("prem_val", 0.0)),
+                            "deductible": str(p.get("ded", "$0")),
+                            "oop_max": str(p.get("oop", "$9,200")),
+                            "pcp": str(p.get("pcp", "$50 copay")),
+                            "specialist": str(p.get("spec", "$90 copay")),
+                            "emergency_room": str(p.get("emergency_room", "$350 copay")),
+                            "urgent_care": str(p.get("urgent_care", "$60 copay")),
+                            "ambulance": str(p.get("ambulance", "$250 copay")),
+                            "labs": str(p.get("labs", "$50 copay")),
+                            "xrays": str(p.get("xrays", "40% coinsurance")),
+                            "office_visits": str(p.get("office_visits", "No charge")),
+                            "cb_phys": str(p.get("cb_phys", "30% coinsurance")),
+                            "cb_fac": str(p.get("cb_fac", "30% coinsurance")),
+                            "lien": chosen_lien,
+                            "benefits_url": p.get("benefits_url", ""),
+                            "brochure_url": p.get("brochure_url", ""),
+                            "formulary_url": p.get("formulary_url", ""),
+                            "network_url": p.get("network_url", "")
+                        })
+                        if idx_p < len(f_plans) - 1:
+                            st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px dashed #E2E8F0;'>", unsafe_allow_html=True)
 
-                for label, vals, text_color, is_purple_bg in quote_rows:
-                    bg_style = "background:#2A0845; color:#FFFFFF;" if is_purple_bg else "background:#FFFFFF;"
-                    lbl_color = text_color if (text_color and not is_purple_bg) else ("#FFFFFF" if is_purple_bg else "#171B34")
-                    preview_html += f'<tr style="{bg_style}">'
-                    preview_html += f'<td style="padding:7px 14px; font-weight:700; color:{lbl_color}; border:1px solid #B8A9C9;">{label}</td>'
-                    for v in vals:
-                        v_color = text_color if (text_color and not is_purple_bg) else ("#FFFFFF" if is_purple_bg else "#171B34")
-                        is_bold = "<b>" in str(v) or is_purple_bg
-                        preview_html += f'<td style="padding:7px 14px; text-align:center; color:{v_color}; font-weight:{"700" if is_bold else "400"}; border:1px solid #B8A9C9;">{v}</td>'
-                    preview_html += '</tr>'
+                    st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
 
-                preview_html += "</tbody></table></div>"
-                st.markdown(preview_html, unsafe_allow_html=True)
-
-                pdf_buffer = generar_cotizacion_pdf(
-                    candidate_name=selected_candidate,
-                    agency_name=agency_db,
-                    hospital_pref=hospital_pref,
-                    obgyn_pref=obgyn_pref,
-                    hosp_in_net=hosp_in_net,
-                    doc_in_net=doc_in_net,
-                    pregnant=pregnant,
-                    current_plan=current_plan,
-                    plans=final_plans
-                )
-                pdf_bytes_data = pdf_buffer.getvalue()
-                clean_cand_fn = re.sub(r'[\(\[\{].*?[\)\]\}]', '', selected_candidate).strip()
-                clean_cand_fn = re.sub(r'\s+', '_', clean_cand_fn)
-                file_name = f"Nexxell_Quote_{clean_cand_fn}.pdf"
-
-                c_down, c_mon = st.columns(2)
-                with c_down:
-                    st.download_button(
-                        label="Download Official Proposal PDF",
-                        data=pdf_bytes_data,
-                        file_name=file_name,
-                        mime="application/pdf",
-                        key="btn_download_pdf",
-                        use_container_width=True
+                    pdf_buffer = generar_cotizacion_pdf(
+                        candidate_name=selected_candidate,
+                        agency_name=agency_db,
+                        hospital_pref=hospital_pref,
+                        obgyn_pref=obgyn_pref,
+                        hosp_in_net=hosp_in_net,
+                        doc_in_net=doc_in_net,
+                        pregnant=pregnant,
+                        current_plan=current_plan,
+                        plans=pdf_plans_data
                     )
-                with c_mon:
-                    if st.button("Upload Proposal to monday.com & Mark as 'Quotes Sent'", type="primary", key="btn_upload_monday", use_container_width=True):
-                        if not item_id:
-                            st.error("This candidate does not have an associated monday.com Item ID.")
-                        else:
-                            with st.spinner("Uploading proposal to monday.com..."):
-                                ok_up, msg_up = upload_pdf_to_monday(item_id, BytesIO(pdf_bytes_data), file_name)
-                                ok_st = push_status_to_monday(item_id, "Quotes Sent")
-                            if ok_up:
-                                st.success("Official proposal PDF uploaded successfully to monday.com (Files column).")
-                                conn = get_db_connection()
-                                conn.cursor().execute("UPDATE chicas_excel SET enrollment_status='Quotes Sent' WHERE nombre_gc=?", (selected_candidate,))
-                                conn.commit()
-                                conn.close()
+                    pdf_bytes_data = pdf_buffer.getvalue()
+
+                    clean_cand_fn = re.sub(r'[\(\[\{].*?[\)\]\}]', '', selected_candidate).strip()
+                    clean_cand_fn = re.sub(r'\s+', '_', clean_cand_fn)
+                    file_name = f"Nexxel_Quote_{clean_cand_fn}.pdf"
+
+                    c_down, c_mon = st.columns(2)
+                    with c_down:
+                        st.download_button(
+                            label="📥 Download Official Proposal PDF",
+                            data=pdf_bytes_data,
+                            file_name=file_name,
+                            mime="application/pdf",
+                            key="btn_download_pdf",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    with c_mon:
+                        if st.button("☁ Upload Proposal to monday.com & Mark as 'Quotes Sent'", type="primary", key="btn_upload_monday", use_container_width=True):
+                            if not item_id:
+                                st.error("This candidate does not have an associated monday.com Item ID.")
                             else:
-                                st.error(f"Failed to upload to monday.com: {msg_up}")
-                            if ok_st:
-                                st.info("Candidate status updated to 'Quotes Sent' in monday.com.")
+                                with st.spinner("Uploading proposal to monday.com..."):
+                                    ok_up, msg_up = upload_pdf_to_monday(item_id, BytesIO(pdf_bytes_data), file_name)
+                                    ok_st = push_status_to_monday(item_id, "Quotes Sent")
+                                if ok_up:
+                                    st.success("Official proposal PDF uploaded successfully to monday.com (Files column).")
+                                    conn = get_db_connection()
+                                    conn.cursor().execute("UPDATE chicas_excel SET enrollment_status='Quotes Sent' WHERE nombre_gc=?", (selected_candidate,))
+                                    conn.commit()
+                                    conn.close()
+                                else:
+                                    st.error(f"Failed to upload to monday.com: {msg_up}")
+                                if ok_st:
+                                    st.info("Candidate status updated to 'Quotes Sent' in monday.com.")
+            else:
+                st.info("💡 Please click '+ Add' on the plan cards above to select up to 5 plans for the official quote proposal.")
+
 
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("⬅ Back to 2. Household & Demographics", key=f"btn_back_s2_bottom_{cand_key}", use_container_width=True):
