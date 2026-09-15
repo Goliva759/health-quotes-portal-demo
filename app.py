@@ -656,14 +656,14 @@ def _fetch_unified_plans_cached(zipcode, age, fips_code=None, state_code=None, p
                     "pcp": str(p.get("pcp", "$50 copay")),
                     "spec": str(p.get("spec", "$90 copay")),
                     "rx": str(p.get("rx", "$15 copay")),
-                    "emergency_room": str(p.get("emergency_room", "$350 copay")),
+                    "emergency_room": str(p.get("emergency_room", "40% after deductible")),
                     "urgent_care": str(p.get("urgent_care", "$60 copay")),
-                    "ambulance": str(p.get("ambulance", "$250 copay")),
+                    "ambulance": str(p.get("ambulance", "40% after deductible")),
                     "labs": str(p.get("labs", "Covered in Tier")),
                     "xrays": str(p.get("xrays", "Standard Diagnostic")),
                     "office_visits": str(p.get("office_visits", "Covered")),
-                    "cb_phys": str(p.get("cb_phys", "Standard In-Network")),
-                    "cb_fac": str(p.get("cb_fac", "Standard In-Network")),
+                    "cb_phys": str(p.get("cb_phys", "40% after deductible")),
+                    "cb_fac": str(p.get("cb_fac", "40% after deductible")),
                     "lien": p.get("lien", "No"),
                     "benefits_url": sbc_doc,
                     "brochure_url": urls.get("brochure") or p.get("brochure_url", ""),
@@ -1042,14 +1042,14 @@ def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pre
         [Paragraph("<b>Max Out of pocket</b>", style_bold)]  + [Paragraph(p['oop_max'], style_purple_sub) for p in plans],
         [Paragraph("Primary Care Physician", style_normal)]  + [Paragraph(p.get('pcp', '$50 copay'), style_normal) for p in plans],
         [Paragraph("Specialist", style_normal)]              + [Paragraph(p.get('specialist', '$90 copay'), style_normal) for p in plans],
-        [Paragraph("Emergency Services", style_normal)]      + [Paragraph(p.get('emergency_room', '$350 copay'), style_normal) for p in plans],
+        [Paragraph("Emergency Services", style_normal)]      + [Paragraph(p.get('emergency_room', '40% after deductible'), style_normal) for p in plans],
         [Paragraph("Urgent Care", style_normal)]             + [Paragraph(p.get('urgent_care', '$60 copay'), style_normal) for p in plans],
-        [Paragraph("Ambulance", style_normal)]               + [Paragraph(p.get('ambulance', '$250 copay'), style_normal) for p in plans],
+        [Paragraph("Ambulance", style_normal)]               + [Paragraph(p.get('ambulance', '40% after deductible'), style_normal) for p in plans],
         [Paragraph("Labs", style_normal)]                    + [Paragraph(p.get('labs', '$50 copay'), style_normal) for p in plans],
         [Paragraph("X-Rays", style_normal)]                  + [Paragraph(p.get('xrays', '40% coinsurance'), style_normal) for p in plans],
         [Paragraph("Office Visits", style_normal)]           + [Paragraph("No charge", style_normal) for _ in plans],
-        [Paragraph("Childbirth/ Physician Services", style_normal)] + [Paragraph(p.get('cb_phys', '30% coinsurance'), style_normal) for p in plans],
-        [Paragraph("Childbirth/ Delivery Facility", style_normal)]  + [Paragraph(p.get('cb_fac', '30% coinsurance'), style_normal) for p in plans],
+        [Paragraph("Childbirth/ Physician Services", style_normal)] + [Paragraph(p.get('cb_phys', '40% after deductible'), style_normal) for p in plans],
+        [Paragraph("Childbirth/ Delivery Facility", style_normal)]  + [Paragraph(p.get('cb_fac', '40% after deductible'), style_normal) for p in plans],
         [Paragraph("<b>Lien for surrogacy?</b>", ParagraphStyle('Wht', parent=style_bold, textColor=colors.white))] +
         [Paragraph(str(p.get('lien', 'Yes')), ParagraphStyle('WhtC', parent=style_normal, textColor=colors.white, alignment=1)) for p in plans],
     ])
@@ -1870,14 +1870,14 @@ if menu_option == "🔍 Search & Quote Candidate":
                         "pcp": str(p.get("pcp", "$50 copay")),
                         "spec": str(p.get("spec", "$90 copay")),
                         "rx": str(p.get("rx", "$15 copay")),
-                        "emergency_room": str(p.get("emergency_room", "$350 copay")),
+                        "emergency_room": str(p.get("emergency_room", "40% after deductible")),
                         "urgent_care": str(p.get("urgent_care", "$60 copay")),
-                        "ambulance": str(p.get("ambulance", "$250 copay")),
+                        "ambulance": str(p.get("ambulance", "40% after deductible")),
                         "labs": str(p.get("labs", "Covered in Tier")),
                         "xrays": str(p.get("xrays", "Standard Diagnostic")),
                         "office_visits": str(p.get("office_visits", "Covered")),
-                        "cb_phys": str(p.get("cb_phys", "Standard In-Network")),
-                        "cb_fac": str(p.get("cb_fac", "Standard In-Network")),
+                        "cb_phys": str(p.get("cb_phys", "40% after deductible")),
+                        "cb_fac": str(p.get("cb_fac", "40% after deductible")),
                         "lien": str(p.get("lien", "No")),
                         "benefits_url": p.get("benefits_url", ""),
                         "brochure_url": p.get("brochure_url", ""),
@@ -2156,18 +2156,35 @@ if menu_option == "🔍 Search & Quote Candidate":
                                 st.write(f"• **Carrier:** {plan.get('issuer')}")
                                 st.write(f"• **Tier & Network:** {plan.get('metal')} ({plan.get('plan_type')})")
                                 st.write(f"• **Specialist Copay:** {plan.get('spec', '$90 copay')}")
-                                st.write(f"• **Emergency Services:** {plan.get('emergency_room', '$350 copay')}")
+                                st.write(f"• **Emergency Services:** {plan.get('emergency_room', '40% after deductible')}")
                                 st.write(f"• **Urgent Care:** {plan.get('urgent_care', '$60 copay')}")
-                                st.write(f"• **Ambulance:** {plan.get('ambulance', '$250 copay')}")
-                                st.write(f"• **Childbirth Physician:** {plan.get('cb_phys', '30% coinsurance')}")
-                                st.write(f"• **Delivery Facility:** {plan.get('cb_fac', '30% coinsurance')}")
-                                st.write(f"• **Surrogacy Lien:** {plan.get('lien', 'Yes')}")
+                                st.write(f"• **Ambulance:** {plan.get('ambulance', '40% after deductible')}")
+                                st.write(f"• **Childbirth Physician:** {plan.get('cb_phys', '40% after deductible')}")
+                                st.write(f"• **Delivery Facility:** {plan.get('cb_fac', '40% after deductible')}")
+
+                                st.markdown("<hr style='margin:10px 0; border:none; border-top:1px dashed #CBD5E1;'>", unsafe_allow_html=True)
+                                lien_key = f"sel_lien_{cand_key}_{pid}"
+                                cur_lien = st.session_state.get(lien_key, "No")
+                                chosen_lien = st.selectbox(
+                                    "Surrogacy Lien?",
+                                    options=["No", "Yes"],
+                                    index=0 if cur_lien == "No" else 1,
+                                    key=lien_key,
+                                    help="Default is 'No' for California individual and Covered CA plans."
+                                )
+
+                                st.markdown("<hr style='margin:10px 0; border:none; border-top:1px dashed #CBD5E1;'>", unsafe_allow_html=True)
+                                st.markdown("**📁 Plan Documents & Links**")
                                 b_url = plan.get("benefits_url")
                                 if b_url:
                                     if ".pdf" in b_url.lower() or "cloudfront" in b_url.lower():
-                                        st.markdown(f"[📄 Official Summary of Benefits (SBC PDF)]({b_url})")
+                                        st.markdown(f"• [📄 Official Summary of Benefits (SBC PDF)]({b_url})")
                                     else:
-                                        st.markdown(f"[🌐 Official Summary of Benefits (Carrier Portal)]({b_url})")
+                                        st.markdown(f"• [🌐 Official Summary of Benefits (Carrier Portal)]({b_url})")
+                                if plan.get("formulary_url"):
+                                    st.markdown(f"• [💊 Prescription Drug Formulary]({plan['formulary_url']})")
+                                if plan.get("network_url"):
+                                    st.markdown(f"• [🏥 Provider & Facility Directory]({plan['network_url']})")
                         with btn_c2:
                             btn_lbl = "✓ Added" if is_selected else "+ Add"
                             btn_type = "secondary" if is_selected else "primary"
@@ -2184,96 +2201,71 @@ if menu_option == "🔍 Search & Quote Candidate":
 
                         st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
-            # ── Proposal Actions: Review, Lien Customization, Download PDF & Upload to Monday.com ──
+            # ── Proposal Actions: Direct Download PDF & Upload to Monday.com ──
             f_plans = [plan_dict[pid] for pid in selected_plan_ids if pid in plan_dict]
             if len(f_plans) > 0:
                 st.markdown("<br>", unsafe_allow_html=True)
-                with st.container(border=True):
-                    st.markdown("#### 📋 Official Proposal Review & Lien Selection")
-                    st.caption("Review your selected plans and set the Surrogacy Lien status (Yes / No) for each plan before generating the official PDF proposal.")
+                pdf_plans_data = []
+                for idx_p, p in enumerate(f_plans):
+                    p_id = p.get("id")
+                    lien_key = f"sel_lien_{cand_key}_{p_id}"
+                    chosen_lien = st.session_state.get(lien_key, "No")
 
-                    pdf_plans_data = []
-                    for idx_p, p in enumerate(f_plans):
-                        p_id = p.get("id")
-                        iss_name = str(p.get("issuer", "")).lower()
-                        default_lien = "No" if (state_db == "CA" or "kaiser" in iss_name or "anthem" in iss_name or "blue shield" in iss_name or p.get("lien") == "No") else "Yes"
+                    pdf_plans_data.append({
+                        "id": p_id,
+                        "tier": p.get("name"),
+                        "issuer": p.get("issuer"),
+                        "metal": p.get("metal"),
+                        "premium": float(p.get("prem_val", 0.0)),
+                        "deductible": str(p.get("ded", "$0")),
+                        "oop_max": str(p.get("oop", "$9,200")),
+                        "pcp": str(p.get("pcp", "$50 copay")),
+                        "specialist": str(p.get("spec", "$90 copay")),
+                        "emergency_room": str(p.get("emergency_room", "40% after deductible")),
+                        "urgent_care": str(p.get("urgent_care", "$60 copay")),
+                        "ambulance": str(p.get("ambulance", "40% after deductible")),
+                        "labs": str(p.get("labs", "$50 copay")),
+                        "xrays": str(p.get("xrays", "40% coinsurance")),
+                        "office_visits": str(p.get("office_visits", "No charge")),
+                        "cb_phys": str(p.get("cb_phys", "40% after deductible")),
+                        "cb_fac": str(p.get("cb_fac", "40% after deductible")),
+                        "lien": chosen_lien,
+                        "benefits_url": p.get("benefits_url", ""),
+                        "brochure_url": p.get("brochure_url", ""),
+                        "formulary_url": p.get("formulary_url", ""),
+                        "network_url": p.get("network_url", "")
+                    })
 
-                        col_lp1, col_lp2, col_lp3 = st.columns([3, 1.5, 1.5])
-                        with col_lp1:
-                            st.markdown(f"**{p.get('name')}**")
-                            st.caption(f"{p.get('issuer')} &bull; {p.get('metal')} ({p.get('plan_type')})", unsafe_allow_html=True)
-                        with col_lp2:
-                            st.markdown(f"**${p.get('prem_val', 0.0):,.2f}** <span style='font-size:0.8rem; color:#64748B;'>/mo</span>", unsafe_allow_html=True)
-                            st.caption(f"Ded: {p.get('ded')} &bull; OOP: {p.get('oop')}", unsafe_allow_html=True)
-                        with col_lp3:
-                            lien_key = f"sel_lien_{cand_key}_{p_id}"
-                            chosen_lien = st.selectbox(
-                                "Surrogacy Lien?",
-                                options=["No", "Yes"],
-                                index=0 if default_lien == "No" else 1,
-                                key=lien_key,
-                                help="Set 'Yes' or 'No' according to Andrea's review. Covered CA / California plans typically standard is 'No'."
-                            )
+                pdf_buffer = generar_cotizacion_pdf(
+                    candidate_name=selected_candidate,
+                    agency_name=agency_db,
+                    hospital_pref=hospital_pref,
+                    obgyn_pref=obgyn_pref,
+                    hosp_in_net=hosp_in_net,
+                    doc_in_net=doc_in_net,
+                    pregnant=pregnant,
+                    current_plan=current_plan,
+                    plans=pdf_plans_data
+                )
+                pdf_bytes_data = pdf_buffer.getvalue()
 
-                        pdf_plans_data.append({
-                            "id": p_id,
-                            "tier": p.get("name"),
-                            "issuer": p.get("issuer"),
-                            "metal": p.get("metal"),
-                            "premium": float(p.get("prem_val", 0.0)),
-                            "deductible": str(p.get("ded", "$0")),
-                            "oop_max": str(p.get("oop", "$9,200")),
-                            "pcp": str(p.get("pcp", "$50 copay")),
-                            "specialist": str(p.get("spec", "$90 copay")),
-                            "emergency_room": str(p.get("emergency_room", "$350 copay")),
-                            "urgent_care": str(p.get("urgent_care", "$60 copay")),
-                            "ambulance": str(p.get("ambulance", "$250 copay")),
-                            "labs": str(p.get("labs", "$50 copay")),
-                            "xrays": str(p.get("xrays", "40% coinsurance")),
-                            "office_visits": str(p.get("office_visits", "No charge")),
-                            "cb_phys": str(p.get("cb_phys", "30% coinsurance")),
-                            "cb_fac": str(p.get("cb_fac", "30% coinsurance")),
-                            "lien": chosen_lien,
-                            "benefits_url": p.get("benefits_url", ""),
-                            "brochure_url": p.get("brochure_url", ""),
-                            "formulary_url": p.get("formulary_url", ""),
-                            "network_url": p.get("network_url", "")
-                        })
-                        if idx_p < len(f_plans) - 1:
-                            st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px dashed #E2E8F0;'>", unsafe_allow_html=True)
+                clean_cand_fn = re.sub(r'[\(\[\{].*?[\)\]\}]', '', selected_candidate).strip()
+                clean_cand_fn = re.sub(r'\s+', '_', clean_cand_fn)
+                file_name = f"Nexxel_Quote_{clean_cand_fn}.pdf"
 
-                    st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
-
-                    pdf_buffer = generar_cotizacion_pdf(
-                        candidate_name=selected_candidate,
-                        agency_name=agency_db,
-                        hospital_pref=hospital_pref,
-                        obgyn_pref=obgyn_pref,
-                        hosp_in_net=hosp_in_net,
-                        doc_in_net=doc_in_net,
-                        pregnant=pregnant,
-                        current_plan=current_plan,
-                        plans=pdf_plans_data
+                c_down, c_mon = st.columns(2)
+                with c_down:
+                    st.download_button(
+                        label="📥 Download Official Proposal PDF",
+                        data=pdf_bytes_data,
+                        file_name=file_name,
+                        mime="application/pdf",
+                        key="btn_download_pdf",
+                        type="primary",
+                        use_container_width=True
                     )
-                    pdf_bytes_data = pdf_buffer.getvalue()
-
-                    clean_cand_fn = re.sub(r'[\(\[\{].*?[\)\]\}]', '', selected_candidate).strip()
-                    clean_cand_fn = re.sub(r'\s+', '_', clean_cand_fn)
-                    file_name = f"Nexxel_Quote_{clean_cand_fn}.pdf"
-
-                    c_down, c_mon = st.columns(2)
-                    with c_down:
-                        st.download_button(
-                            label="📥 Download Official Proposal PDF",
-                            data=pdf_bytes_data,
-                            file_name=file_name,
-                            mime="application/pdf",
-                            key="btn_download_pdf",
-                            type="primary",
-                            use_container_width=True
-                        )
-                    with c_mon:
-                        if st.button("☁ Upload Proposal to monday.com & Mark as 'Quotes Sent'", type="primary", key="btn_upload_monday", use_container_width=True):
+                with c_mon:
+                    if st.button("☁ Upload Proposal to monday.com & Mark as 'Quotes Sent'", type="primary", key="btn_upload_monday", use_container_width=True):
                             if not item_id:
                                 st.error("This candidate does not have an associated monday.com Item ID.")
                             else:
