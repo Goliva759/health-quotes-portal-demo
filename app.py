@@ -607,7 +607,7 @@ def resolver_marketplace_por_estado(state_str, zip_code=""):
 # 5.1 MOTOR EXCLUSIVO DE COTIZACIÓN: HEALTHSHERPA ONE API
 # ==============================================================================
 @st.cache_data(ttl=900, show_spinner=False)
-def _fetch_unified_plans_cached(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v5"):
+def _fetch_unified_plans_cached(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v6"):
     """
     Motor oficial de cotizaciones HealthSherpa One API (Caché inteligente de éxito):
     - Precios 100% reales directo de aseguradoras (Kaiser, Anthem, Blue Shield, etc.)
@@ -710,7 +710,7 @@ def _fetch_unified_plans_cached(zipcode, age, fips_code=None, state_code=None, p
     raise RuntimeError("HealthSherpa One API did not return plans for this query.")
 
 
-def fetch_unified_plans(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v5"):
+def fetch_unified_plans(zipcode, age, fips_code=None, state_code=None, pregnant=False, carrier_pref=None, provider_npis=None, effective_date=None, _cache_ver="hs_v6"):
     try:
         return _fetch_unified_plans_cached(
             zipcode=zipcode,
