@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # Streamlit secrets
-.streamlit/secrets.toml
+.streamlit/secret.toml
 
 # Environment variables
 .env
