@@ -969,6 +969,51 @@ def resolver_hospital_preferido(hospital_input, lista_base):
 # ==============================================================================
 # 7. GENERADOR PDF DINÁMICO
 # ==============================================================================
+def _format_pdf_plan_title(p):
+    iss = str(p.get("issuer") or "").strip()
+    nm = str(p.get("tier") or p.get("name") or "").strip()
+    iss_l = iss.lower()
+    if "blue shield" in iss_l or "physician" in iss_l:
+        c_name = "Blueshield"
+    elif "anthem" in iss_l or "blue cross" in iss_l:
+        c_name = "Anthem"
+    elif "kaiser" in iss_l:
+        c_name = "Kaiser"
+    elif "health net" in iss_l or "ambetter" in iss_l:
+        c_name = "Health Net"
+    elif "molina" in iss_l:
+        c_name = "Molina"
+    else:
+        c_name = iss.split()[0] if iss else ""
+
+    if c_name and c_name.lower() not in nm.lower():
+        return f"{c_name} {nm}"
+    return nm
+
+
+def _clean_pdf_benefit_text(val):
+    s = str(val or "").strip()
+    if not s:
+        return "No charge"
+    s_low = s.lower()
+    # Strip "after deductible"
+    if "after deductible" in s_low or "after ded" in s_low:
+        m_cop = re.search(r'(\$\d+[\d,]*\s*copay)', s, re.IGNORECASE)
+        if m_cop:
+            return m_cop.group(1)
+        m_pct = re.search(r'(\d+)\s*%', s)
+        if m_pct:
+            return f"{m_pct.group(1)}% coinsurance"
+        if "no charge" in s_low or "$0" in s_low:
+            return "No charge"
+        if "ded" in s_low:
+            return "Ded. then 0%"
+    m_just_pct = re.fullmatch(r'(\d+)%', s)
+    if m_just_pct:
+        return f"{m_just_pct.group(1)}% coinsurance"
+    return s
+
+
 def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pref, hosp_in_net, doc_in_net, pregnant, current_plan, plans):
     buffer = BytesIO()
     if not plans:
@@ -976,10 +1021,13 @@ def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pre
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
 
-    style_normal    = ParagraphStyle('Norm',    parent=styles['Normal'], fontSize=8.5, leading=11, textColor=colors.black)
-    style_bold      = ParagraphStyle('Bld',     parent=style_normal, fontName='Helvetica-Bold')
-    style_purple_hdr = ParagraphStyle('PurpHdr', parent=style_normal, fontName='Helvetica-Bold', textColor=colors.white, alignment=1)
-    style_purple_sub = ParagraphStyle('PurpSub', parent=style_normal, fontName='Helvetica-Bold', textColor=colors.HexColor('#2A0845'), alignment=1)
+    style_normal      = ParagraphStyle('Norm',        parent=styles['Normal'], fontSize=8.5, leading=11, textColor=colors.black)
+    style_bold        = ParagraphStyle('Bld',         parent=style_normal, fontName='Helvetica-Bold')
+    style_purple_hdr  = ParagraphStyle('PurpHdr',     parent=style_normal, fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.white, alignment=1)
+    style_purple_sub  = ParagraphStyle('PurpSub',     parent=style_normal, fontName='Helvetica-Bold', fontSize=8.5, leading=11, textColor=colors.HexColor('#2A0845'), alignment=2)
+    style_cell_plan   = ParagraphStyle('PlanVal',     parent=style_normal, fontName='Helvetica', fontSize=8, leading=10.5, textColor=colors.black, alignment=2)
+    style_cell_center = ParagraphStyle('PlanValCtr',  parent=style_normal, fontName='Helvetica', fontSize=8, leading=10.5, textColor=colors.black, alignment=1)
+    style_cell_lien   = ParagraphStyle('LienVal',     parent=style_normal, fontName='Helvetica-Bold', fontSize=8.5, leading=11, textColor=colors.white, alignment=1)
 
     story = []
 
@@ -1024,47 +1072,65 @@ def generar_cotizacion_pdf(candidate_name, agency_name, hospital_pref, obgyn_pre
     story.append(Paragraph("Please review our recommendations and quotes below:", style_normal))
     story.append(Spacer(1, 8))
 
-    # SECCIÓN 1
+    # SECCIÓN 1: RECOMMENDATIONS
     story.append(Paragraph("<b>1) Recommendations:</b>", style_normal))
     story.append(Spacer(1, 4))
     story.append(Paragraph("• Please remind the GC not to apply for health insurance during Open Enrollment to avoid potential complications from having multiple plans.", style_normal))
     story.append(Spacer(1, 10))
 
-    # SECCIÓN 2: TABLA
-    story.append(Paragraph("<b>2) Quotes Preview</b>", style_normal))
+    # SECCIÓN 2: TABLA (FORMATO OFICIAL ANDREA)
+    story.append(Paragraph("<b>2) Quotes</b>", style_normal))
     story.append(Spacer(1, 6))
 
-    headers_row = [""] + [Paragraph(p["tier"], style_purple_hdr) for p in plans]
+    headers_row = [""] + [Paragraph(f"<b>{_format_pdf_plan_title(p)}</b>", style_purple_hdr) for p in plans]
     matrix_data = [headers_row]
+
+    # Fila del Hospital Preferido (In Network / Out of Network / TBC)
+    clean_hosp = hospital_pref if (hospital_pref and hospital_pref.strip().lower() not in ["none", "n/a", ""]) else "Preferred Hospital"
+    hosp_status = "In Network" if hosp_in_net else ("TBC" if not hosp_in_net and not hospital_pref else "Out of Network")
+    matrix_data.append(
+        [Paragraph(f"<b>{clean_hosp}</b>", style_bold)] + [Paragraph(hosp_status, style_cell_center) for _ in plans]
+    )
+
+    # Filas exactas del resumen ejecutivo oficial de Andrea
     matrix_data.extend([
         [Paragraph("<b>Monthly Premium **</b>", style_bold)] + [Paragraph(f"<b>${p['premium']:.2f}</b>", style_purple_sub) for p in plans],
         [Paragraph("<b>Deductible</b>", style_bold)]         + [Paragraph(p['deductible'], style_purple_sub) for p in plans],
         [Paragraph("<b>Max Out of pocket</b>", style_bold)]  + [Paragraph(p['oop_max'], style_purple_sub) for p in plans],
-        [Paragraph("Primary Care Physician", style_normal)]  + [Paragraph(p.get('pcp', '$50 copay'), style_normal) for p in plans],
-        [Paragraph("Specialist", style_normal)]              + [Paragraph(p.get('specialist', '$90 copay'), style_normal) for p in plans],
-        [Paragraph("Emergency Services", style_normal)]      + [Paragraph(p.get('emergency_room', '40% after deductible'), style_normal) for p in plans],
-        [Paragraph("Urgent Care", style_normal)]             + [Paragraph(p.get('urgent_care', '$60 copay'), style_normal) for p in plans],
-        [Paragraph("Ambulance", style_normal)]               + [Paragraph(p.get('ambulance', '40% after deductible'), style_normal) for p in plans],
-        [Paragraph("Labs", style_normal)]                    + [Paragraph(p.get('labs', '$50 copay'), style_normal) for p in plans],
-        [Paragraph("X-Rays", style_normal)]                  + [Paragraph(p.get('xrays', '40% coinsurance'), style_normal) for p in plans],
-        [Paragraph("Office Visits", style_normal)]           + [Paragraph("No charge", style_normal) for _ in plans],
-        [Paragraph("Childbirth/ Physician Services", style_normal)] + [Paragraph(p.get('cb_phys', '40% after deductible'), style_normal) for p in plans],
-        [Paragraph("Childbirth/ Delivery Facility", style_normal)]  + [Paragraph(p.get('cb_fac', '40% after deductible'), style_normal) for p in plans],
-        [Paragraph("<b>Lien for surrogacy?</b>", ParagraphStyle('Wht', parent=style_bold, textColor=colors.white))] +
-        [Paragraph(str(p.get('lien', 'Yes')), ParagraphStyle('WhtC', parent=style_normal, textColor=colors.white, alignment=1)) for p in plans],
+        [Paragraph("Primary Care Physician", style_normal)]  + [Paragraph(_clean_pdf_benefit_text(p.get('pcp', '$50 copay')), style_cell_plan) for p in plans],
+        [Paragraph("Specialist", style_normal)]              + [Paragraph(_clean_pdf_benefit_text(p.get('specialist', '$90 copay')), style_cell_plan) for p in plans],
+        [Paragraph("Labs", style_normal)]                    + [Paragraph(_clean_pdf_benefit_text(p.get('labs', '$50 copay')), style_cell_plan) for p in plans],
+        [Paragraph("X-Rays", style_normal)]                  + [Paragraph(_clean_pdf_benefit_text(p.get('xrays', '40% coinsurance')), style_cell_plan) for p in plans],
+        [Paragraph("Office Visits", style_normal)]           + [Paragraph("No charge", style_cell_plan) for _ in plans],
+        [Paragraph("Childbirth/ Physician Services", style_normal)] + [Paragraph(_clean_pdf_benefit_text(p.get('cb_phys', '40% coinsurance')), style_cell_plan) for p in plans],
+        [Paragraph("Childbirth/ Delivery Facility", style_normal)]  + [Paragraph(_clean_pdf_benefit_text(p.get('cb_fac', '40% coinsurance')), style_cell_plan) for p in plans],
+        [Paragraph("<b>Lien for surrogacy</b>", ParagraphStyle('Wht', parent=style_bold, textColor=colors.white))] +
+        [Paragraph(str(p.get('lien', 'No')), style_cell_lien) for p in plans],
     ])
 
-    len_p = max(1, len(plans))
-    col_w = [150] + [int(400 / len_p)] * len_p
-    t_quote = Table(matrix_data, colWidths=col_w)
+    num_p = len(plans)
+    if num_p == 1:
+        col_w = [210, 190]        # 400 pt ancho total, compacto y centrado
+    elif num_p == 2:
+        col_w = [180, 140, 140]   # 460 pt ancho total, equilibrado
+    elif num_p == 3:
+        col_w = [160, 120, 120, 120]  # 520 pt ancho total
+    elif num_p == 4:
+        col_w = [152, 100, 100, 100, 100]  # 552 pt ancho total (página completa)
+    else:
+        col_w = [142, 82, 82, 82, 82, 82]  # 552 pt ancho total (5 planes)
+
+    t_quote = Table(matrix_data, colWidths=col_w, hAlign='CENTER')
     t_quote.setStyle(TableStyle([
         ('BACKGROUND', (1, 0),  (-1, 0),  colors.HexColor('#2A0845')),
+        ('BACKGROUND', (0, 1),  (-1, 1),  colors.HexColor('#F4EFF9')),
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#2A0845')),
-        ('ALIGN',      (1, 0),  (-1, -1), 'CENTER'),
         ('VALIGN',     (0, 0),  (-1, -1), 'MIDDLE'),
         ('GRID',       (0, 0),  (-1, -1), 0.5, colors.HexColor('#B8A9C9')),
         ('TOPPADDING',    (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING',   (0, 0), (0, -1),  6),
+        ('RIGHTPADDING',  (1, 0), (-1, -1), 8),
     ]))
     story.append(t_quote)
     story.append(Spacer(1, 12))
