@@ -1,6 +1,6 @@
 """
 HealthSherpa One API Integration Service
-Nexxel Corporation Quotes Portal
+Health Insurance Quotes Portal (Demo)
 
 Provides client methods for:
 - County resolution (GET /v1/reference/counties)
@@ -18,7 +18,7 @@ HEALTHSHERPA_BASE_URL = os.environ.get(
     "HEALTHSHERPA_BASE_URL", "https://api.one.healthsherpa.com"
 ).rstrip("/")
 
-DEFAULT_API_KEY = "hs1d97b8327d7a1acfb8ba498fe31523d2e50c900cc76b99d0cfdd041d920"
+DEFAULT_API_KEY = ""
 DEFAULT_TIMEOUT = 20
 
 # Fast in-memory FIPS resolution for all candidate ZIP codes to eliminate network lag
@@ -154,7 +154,7 @@ def get_default_effective_date() -> str:
 def get_headers(api_key: Optional[str] = None) -> Dict[str, str]:
     """
     Builds required standard headers for HealthSherpa One API.
-    Always ensures Andrea's active production API key is present.
+    Builds headers with API key if configured.
     """
     key_clean = (api_key or os.environ.get("HEALTHSHERPA_API_KEY") or DEFAULT_API_KEY).strip()
     if not key_clean:
@@ -163,7 +163,7 @@ def get_headers(api_key: Optional[str] = None) -> Dict[str, str]:
         "x-api-key": key_clean,
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "User-Agent": "Nexxel-Quotes-Portal/2.0"
+        "User-Agent": "Health-Quotes-Demo/1.0"
     }
 
 
@@ -247,12 +247,12 @@ def quote_plans(
         "member_id": "applicant-1",
         "age": int(age) if str(age).isdigit() else 28,
         "relationship": "primary",
-        "uses_tobacco": False,  # Hardcoded false for surrogacy eligibility
+        "uses_tobacco": False,
         "pregnant": bool(pregnant)
     }
 
     # Determine exchange types: For California, query BOTH on_exchange (Covered CA) and off_exchange (Private)
-    # so Andrea has access to all options (e.g. Silver 70 HMO at $465.24 and Silver 70 Off Exchange HMO at $435.67)
+    # ensure all options (On-Exchange and Off-Exchange) are available
     is_ca = (st_str == "CA" or zip_str.startswith(("90","91","92","93","94","95","96")))
     ex_modes = ["on_exchange", "off_exchange"] if is_ca else ["on_exchange", "off_exchange"]
 
@@ -317,7 +317,7 @@ def quote_plans(
     if combined_raw_plans:
         normalized_plans = [_normalize_plan(p) for p in combined_raw_plans]
 
-        # For California: ensure Andrea sees both On-Exchange (Covered CA) and Off-Exchange Silver plans
+        # For California: ensure both On-Exchange (Covered CA) and Off-Exchange Silver plans are available
         if is_ca:
             ca_silver_on_ex = []
             for np in normalized_plans:
@@ -447,7 +447,7 @@ def _normalize_plan(raw: Dict[str, Any]) -> Dict[str, Any]:
     benefits = raw.get("benefits", {}) or {}
     cost_sharing = raw.get("cost_sharing", {}) or {}
 
-    # Full private premium (unsubsidized for surrogacy)
+    # Full private premium (unsubsidized)
     gross_prem = pricing.get("gross_premium")
     net_prem = pricing.get("net_premium")
     try:
@@ -583,7 +583,7 @@ def _normalize_plan(raw: Dict[str, Any]) -> Dict[str, Any]:
         else:
             sbc_url = "https://www.coveredca.com/find-plans/"
 
-    # Default Surrogacy Lien: California (Covered CA / individual plans) is typically 'No'
+    # Default Lien status
     # Editable by broker directly in the plan popover
     is_ca_carrier = ("kaiser" in iss_lower or "anthem" in iss_lower or "blue shield" in iss_lower or "ca" in iss_lower)
     default_lien = "No" if is_ca_carrier else "Yes"
